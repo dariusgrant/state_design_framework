@@ -1,8 +1,7 @@
-#include <exception>
+#include <functional>
 #include <iostream>
-#include <stdexcept>
-#include <vector>
-#include <unordered_map>
+#include "../include/publisher.hpp"
+#include "../include/state_machine.hpp"
 
 class LightSwitchSubscriber {
     public:
@@ -29,61 +28,6 @@ class Radio : public LightSwitchSubscriber {
         std::cout << "Radio Off\n";
     }
 
-};
-
-template <class T>
-class Publisher {
-    protected:
-    std::vector<T*> subscribers;
-
-    public:
-    void add_subscriber(T* sub) {
-        subscribers.push_back(sub);
-    }
-};
- 
-template <class Input>
-class State {
-    private:
-    std::unordered_map<Input, State*> transition_map;
-    
-    public:
-    virtual void on_enter() = 0;
-    virtual void on_exit() = 0;
-
-    State& add_transition(Input input, State* new_state) {
-        transition_map[input] = new_state;
-        return *this;
-    }
-
-    State* transition(Input input) {
-        try {
-            return transition_map.at(input);
-        } catch (std::out_of_range& e) {
-            return this;
-        }
-    }
-};
-
-template <class Input>
-class StateMachine {
-    private:
-    State<Input>* current_state;
-
-    public:
-    void set_current_state(State<Input>* state) {
-        current_state = state;
-    }
-
-    void input(Input input) {
-        if(!current_state) {
-            throw std::runtime_error("State machine hasn't set initial state.");
-        }
-        current_state->on_exit();
-        current_state = current_state->transition(input);
-        current_state->on_enter();
-    }
-    
 };
 
 class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{    
@@ -121,19 +65,23 @@ class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{
         set_current_state(&off);
     }
 
+    void notify(LightSwitchSubscriber* sub, std::function<void(LightSwitchSubscriber*)> func) {
+        func(sub);
+    }
+    
+    void notify_all(std::function<void(LightSwitchSubscriber*)> func) {
+        for(auto& sub : subscribers) {
+            notify(sub, func);
+        }
+    }
     void turn_on(){
         input(true);
-        for (auto& sub : subscribers) {
-            sub->lightswitch_on_cb();
-        }
+        notify_all(&LightSwitchSubscriber::lightswitch_on_cb);
     }
 
     void turn_off() {
         input(false);
-        for (auto& sub : subscribers) {
-            sub->lightswitch_off_cb();
-        }
-
+        notify_all(&LightSwitchSubscriber::lightswitch_off_cb);
     }
 };
 
