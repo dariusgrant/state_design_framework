@@ -65,15 +65,6 @@ class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{
         set_current_state(&off);
     }
 
-    void notify(LightSwitchSubscriber* sub, std::function<void(LightSwitchSubscriber*)> func) {
-        func(sub);
-    }
-    
-    void notify_all(std::function<void(LightSwitchSubscriber*)> func) {
-        for(auto& sub : subscribers) {
-            notify(sub, func);
-        }
-    }
     void turn_on(){
         input(true);
         notify_all(&LightSwitchSubscriber::lightswitch_on_cb);
@@ -81,7 +72,7 @@ class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{
 
     void turn_off() {
         input(false);
-        notify_all(&LightSwitchSubscriber::lightswitch_off_cb);
+        notify_all(&LightSwitchSubscriber::lightswitch_off_cb, 1);
     }
 };
 
