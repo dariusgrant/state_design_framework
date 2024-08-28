@@ -7,6 +7,8 @@ class LightSwitchSubscriber {
     public:
     virtual void lightswitch_on_cb() = 0;
     virtual void lightswitch_off_cb() = 0;
+    virtual void lightswitch_on_cb(int p) = 0;
+    virtual void lightswitch_off_cb(int p) = 0;
 };
 
 class Lightbulb : public LightSwitchSubscriber {
@@ -16,6 +18,14 @@ class Lightbulb : public LightSwitchSubscriber {
 
     void lightswitch_off_cb() override {
         std::cout << "Lightbulb Off\n";
+    }
+
+    void lightswitch_on_cb(int p) override {
+        std::cout << "Lightbulb = " << p << "\n";
+    }
+
+    void lightswitch_off_cb(int p) override {
+        std::cout << "Lightbulb = " << p << "\n";
     }
 };
 
@@ -28,6 +38,13 @@ class Radio : public LightSwitchSubscriber {
         std::cout << "Radio Off\n";
     }
 
+    void lightswitch_on_cb(int p) override {
+        std::cout << "Radio = " << p << "\n";
+    }
+
+    void lightswitch_off_cb(int p) override {
+        std::cout << "Radio = " << p << "\n";
+    }
 };
 
 class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{    
@@ -68,16 +85,15 @@ class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{
     void turn_on(){
         input(true);
         notify_all(&LightSwitchSubscriber::lightswitch_on_cb);
+        notify_all(&LightSwitchSubscriber::lightswitch_on_cb, 1);
     }
 
     void turn_off() {
         input(false);
-        notify_all(&LightSwitchSubscriber::lightswitch_off_cb, 1);
+        notify_all(&LightSwitchSubscriber::lightswitch_off_cb);
+        notify_all(&LightSwitchSubscriber::lightswitch_off_cb, 0);
     }
 };
-
-
-
 
 int main() {
     auto lswitch = LightSwitch();
