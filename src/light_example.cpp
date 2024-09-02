@@ -1,108 +1,113 @@
-#include <functional>
-#include <iostream>
 #include "../include/publisher.hpp"
 #include "../include/state_machine.hpp"
+#include <iostream>
+#include <unordered_map>
 
-class LightSwitchSubscriber {
-    public:
-    virtual void lightswitch_on_cb() = 0;
-    virtual void lightswitch_off_cb() = 0;
-    virtual void lightswitch_on_cb(int p) = 0;
-    virtual void lightswitch_off_cb(int p) = 0;
+class LightSwitchSubscriber : public Subscriber<LightSwitchSubscriber> {
+public:
+  LightSwitchSubscriber(const char *name) : Subscriber(name) {}
+  virtual void lightswitch_on_cb() = 0;
+  virtual void lightswitch_off_cb() = 0;
+  virtual void lightswitch_on_cb(int p) = 0;
+  virtual void lightswitch_off_cb(int p) = 0;
 };
 
 class Lightbulb : public LightSwitchSubscriber {
-    void lightswitch_on_cb() override {
-        std::cout << "Lightbulb On\n";
-    }
+public:
+  Lightbulb() : LightSwitchSubscriber("LightBulb"){};
+  void lightswitch_on_cb() override { std::cout << "Lightbulb On\n"; }
 
-    void lightswitch_off_cb() override {
-        std::cout << "Lightbulb Off\n";
-    }
+  void lightswitch_off_cb() override { std::cout << "Lightbulb Off\n"; }
 
-    void lightswitch_on_cb(int p) override {
-        std::cout << "Lightbulb = " << p << "\n";
-    }
+  void lightswitch_on_cb(int p) override {
+    std::cout << "Lightbulb = " << p << "\n";
+  }
 
-    void lightswitch_off_cb(int p) override {
-        std::cout << "Lightbulb = " << p << "\n";
-    }
+  void lightswitch_off_cb(int p) override {
+    std::cout << "Lightbulb = " << p << "\n";
+  }
 };
 
 class Radio : public LightSwitchSubscriber {
-    void lightswitch_on_cb() override {
-        std::cout << "Radio On\n";
-    }
+public:
+  Radio() : LightSwitchSubscriber("Radio"){};
 
-    void lightswitch_off_cb() override {
-        std::cout << "Radio Off\n";
-    }
+  void lightswitch_on_cb() override { std::cout << "Radio On\n"; }
 
-    void lightswitch_on_cb(int p) override {
-        std::cout << "Radio = " << p << "\n";
-    }
+  void lightswitch_off_cb() override { std::cout << "Radio Off\n"; }
 
-    void lightswitch_off_cb(int p) override {
-        std::cout << "Radio = " << p << "\n";
-    }
+  void lightswitch_on_cb(int p) override {
+    std::cout << "Radio = " << p << "\n";
+  }
+
+  void lightswitch_off_cb(int p) override {
+    std::cout << "Radio = " << p << "\n";
+  }
 };
 
-class LightSwitch : public Publisher<LightSwitchSubscriber>, StateMachine<bool>{    
-    public:
-    class OnState : public State<bool> {
-        void on_enter() override {
-            std::cout << "Switch On\n";
-        }
+class LightSwitchState : public State<bool> {};
+class OnState : public LightSwitchState {
+  void on_enter(bool) override { std::cout << "Switch On\n"; }
 
-        void on_exit() override {
-            std::cout << "Turning Switch Off\n";
-        }
-    };
+  void on_exit(bool) override { std::cout << "Turning Switch Off\n"; }
+};
 
-    class OffState : public State<bool> {
-        void on_enter() override {
-            std::cout << "Switch Off\n";
-        }
+class OffState : public LightSwitchState {
+  void on_enter(bool) override { std::cout << "Switch Off\n"; }
 
-        void on_exit() override {
-            std::cout << "Turning Switch On\n";
-        }
-    };
+  void on_exit(bool) override { std::cout << "Turning Switch On\n"; }
+};
 
-    private:
-    OnState on;
-    OffState off;
+class LightSwitchV2 : public Publisher<LightSwitchSubscriber>,
+                      FSM<LightSwitchState, bool> {
+public:
+private:
+  OnState on;
+  OffState off;
 
-    public:
-    LightSwitch() {
-        on.add_transition(true, &on);
-        on.add_transition(false, &off);
-        off.add_transition(true, &on);
-        off.add_transition(false, &off);
-        set_current_state(&off);
-    }
+public:
+  LightSwitchV2(LightSwitchState *initial_state,
+                std::unordered_map<LightSwitchState *,
+                                   std::unordered_map<bool, LightSwitchState *>>
+                    transitions)
+      : FSM(initial_state, transitions) {}
 
-    void turn_on(){
-        input(true);
-        notify_all(&LightSwitchSubscriber::lightswitch_on_cb);
-        notify_all(&LightSwitchSubscriber::lightswitch_on_cb, 1);
-    }
+  void turn_on() {
+    input(true);
+    notify_all(&LightSwitchSubscriber::lightswitch_on_cb);
+  }
 
-    void turn_off() {
-        input(false);
-        notify_all(&LightSwitchSubscriber::lightswitch_off_cb);
-        notify_all(&LightSwitchSubscriber::lightswitch_off_cb, 0);
-    }
+  void turn_off() {
+    input(false);
+    notify_all(&LightSwitchSubscriber::lightswitch_off_cb);
+  }
 };
 
 int main() {
-    auto lswitch = LightSwitch();
-    auto lbulb = Lightbulb();
-    auto radio = Radio();
-    lswitch.add_subscriber(&lbulb);
-    lswitch.add_subscriber(&radio);
-    lswitch.turn_on();
-    lswitch.turn_off();
+  // auto lswitch = LightSwitch();
+  OffState offstate;
+  OnState onstate;
+  std::unordered_map<bool, LightSwitchState *> offstate_transitions{
+      {false, &offstate}, {true, &onstate}};
+  std::unordered_map<bool, LightSwitchState *> onstate_transitions{
+      {false, &offstate}, {true, &onstate}};
+
+  std::unordered_map<LightSwitchState *,
+                     std::unordered_map<bool, LightSwitchState *>>
+      transitions = {{&offstate, offstate_transitions},
+                     {&onstate, onstate_transitions}};
+  auto lswitchv2 = LightSwitchV2(&offstate, transitions);
+  auto lbulb = Lightbulb();
+  auto radio = Radio();
+  lswitchv2.add_subscriber(&lbulb);
+  lswitchv2.turn_on();
+  lswitchv2.turn_off();
+  // # TODO test removing single subscriber
+  // lswitch.remove_subscriber(lbulb);
+  // lswitch.turn_off();
+  // lswitch.turn_on();
+  // radio.unsubscribe_from(lswitch);
+  // lswitch.turn_off();
 }
 
 /*

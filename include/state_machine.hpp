@@ -1,46 +1,53 @@
-#include <unordered_map>
 #include <stdexcept>
+#include <unordered_map>
 
-template <class Input>
-class State {
-    private:
-    std::unordered_map<Input, State*> transition_map;
-    
-    public:
-    virtual void on_enter() = 0;
-    virtual void on_exit() = 0;
-
-    State& add_transition(Input input, State* new_state) {
-        transition_map[input] = new_state;
-        return *this;
-    }
-
-    State* transition(Input input) {
-        try {
-            return transition_map.at(input);
-        } catch (std::out_of_range& e) {
-            return this;
-        }
-    }
+/*
+Description:
+State
+*/
+template <class Input> class State {
+public:
+  virtual void on_enter(Input input) {};
+  virtual void on_exit(Input input) {};
 };
 
-template <class Input>
-class StateMachine {
-    private:
-    State<Input>* current_state;
+/*
+Description:
+FSM (Finite State Machine) contains a set of states that are able to process the
+same set of inputs that are used to transition from state to state and perform
+actions dependent on the state.
 
-    public:
-    void set_current_state(State<Input>* state) {
-        current_state = state;
-    }
+Parameters:
+  BaseStateClass: The base class of the set of states
+  the FSM will use for transitions.
 
-    void input(Input input) {
-        if(!current_state) {
-            throw std::runtime_error("State machine hasn't set initial state.");
-        }
-        current_state->on_exit();
-        current_state = current_state->transition(input);
-        current_state->on_enter();
+  Input: The input "class" - the type that's used for input transitions where
+  its value is the key within the transition mapping.
+*/
+template <class BaseStateClass, class Input> class FSM {
+  BaseStateClass *state;
+  std::unordered_map<BaseStateClass *,
+                     std::unordered_map<Input, BaseStateClass *>>
+      transitions;
+
+public:
+  FSM(BaseStateClass *initial_state,
+      std::unordered_map<BaseStateClass *,
+                         std::unordered_map<Input, BaseStateClass *>>
+          transitions)
+      : state(initial_state), transitions(transitions) {}
+
+  void input(Input input) {
+    try {
+      auto state_transitions = transitions.at(state);
+      auto new_state = state_transitions.at(input);
+      state->on_exit(input);
+      state = new_state;
+      state->on_enter(input);
+    } catch (std::out_of_range &e) {
+      throw e;
+      // throw std::out_of_range("Failed to find transition for " + state + " X
+      // " + input + ": " + e.what());
     }
-    
+  }
 };
