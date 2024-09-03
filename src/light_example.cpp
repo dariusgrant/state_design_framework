@@ -62,8 +62,8 @@ class LightSwitchV2 : public Publisher<LightSwitchSubscriber>,
                       FSM<LightSwitchState, bool> {
 public:
 private:
-  OnState on;
-  OffState off;
+  // OnState on;
+  // OffState off;
 
 public:
   LightSwitchV2(LightSwitchState *initial_state,
