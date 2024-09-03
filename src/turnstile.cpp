@@ -4,9 +4,10 @@
 
 enum class TurnstileStateValues { Locked, Unlocked };
 enum class TurnstileInputValues { Coin, Push };
-class TurnstileState : public State<TurnstileInputValues> {};
+using TurnstileState = State<TurnstileInputValues>;
 
 class LockedState : public TurnstileState {
+  static const TurnstileStateValues value = TurnstileStateValues::Locked;
   void on_enter(TurnstileInputValues input) override {}
   void on_exit(TurnstileInputValues input) override {
     switch (input) {
@@ -23,6 +24,7 @@ class LockedState : public TurnstileState {
 };
 
 class UnlockedState : public TurnstileState {
+  static const TurnstileStateValues value = TurnstileStateValues::Unlocked;
   void on_enter(TurnstileInputValues input) override {}
   void on_exit(TurnstileInputValues input) override {
     switch (input) {
