@@ -11,17 +11,17 @@ Parameters:
   ObjType: The type of object the State operates on.
   Input: The type of paramter the State is constrained to.
 */
-// template <class ObjType, class Input> class State {
-template <class Input> class State {
-private:
-  // ObjType *object;
+template <class ObjType, class Input> class State {
+  // template <class Input> class State {
+protected:
+  ObjType *object;
 
 public:
   /*
   Parameters:
     object: The address of the object the State operates on.
   */
-  // State(ObjType *object) : object(object) {}
+  State(ObjType *object) : object(object) {}
 
   /*
   Description:
