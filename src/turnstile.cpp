@@ -2,11 +2,12 @@
 #include <iostream>
 #include <unordered_map>
 
-enum class TurnstileInputEnum { Coin, Push };
-
+/*
+Step 1:
+Create the object that will be manipulated by the FSM.
+*/
 class Turnstile {
 private:
-  // Create the properties of the object that gives its functionality
   bool is_locked;
 
 public:
@@ -17,6 +18,16 @@ public:
   void output(std::string message) { std::cout << message; }
 };
 
+/*
+Step 2:
+Create the input set that can be accepted by the FSM.
+*/
+enum class TurnstileInputEnum { None, Coin, Push };
+
+/*
+Step 3:
+Create the set of states the FSM will use to transition between.
+*/
 using TurnstileState = State<Turnstile, TurnstileInputEnum>;
 class LockedState : public TurnstileState {
 public:
@@ -58,6 +69,10 @@ public:
   }
 };
 
+/*
+Step 4:
+Create the FSM.
+*/
 class TurnstileFSM : public Turnstile, FSM<TurnstileState, TurnstileInputEnum> {
 private:
   LockedState locked_state;
@@ -79,12 +94,17 @@ public:
                        {&unlocked_state, unlocked_transitions}};
 
     reset(&locked_state, transitions);
+    start(TurnstileInputEnum::None);
   }
 
   void push() { input(TurnstileInputEnum::Push); }
   void insert_coin() { input(TurnstileInputEnum::Coin); }
 };
 
+/*
+Step 5:
+
+*/
 int main() {
   auto turnstile = TurnstileFSM();
   turnstile.push();

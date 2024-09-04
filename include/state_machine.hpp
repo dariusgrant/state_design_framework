@@ -54,6 +54,7 @@ Parameters:
   its value is the key within the transition mapping.
 */
 template <class BaseStateClass, class Input> class FSM {
+protected:
   BaseStateClass *state; // The currenet state of the FSM.
   std::unordered_map<BaseStateClass *,
                      std::unordered_map<Input, BaseStateClass *>>
@@ -72,29 +73,17 @@ public:
           transitions)
       : state(initial_state), transitions(transitions) {}
 
-  void reset(BaseStateClass *initial_state,
-             std::unordered_map<BaseStateClass *,
-                                std::unordered_map<Input, BaseStateClass *>>
-                 transitions) {
-    state = initial_state;
-    this->transitions = transitions;
-  }
   /*
   Description:
-  The FSM receives an input, performs its exit function, transitions
+  The FSM receives an input, performs its exit function, transition to next
+  state defined by the transition mapping, and finally enters the state.
 
   Parameters:
-    BaseStateClass: The base class of the set of states
-    the FSM will use for transitions.
-
-    Input: The input "class" - the type that's used for input transitions
-  where its value is the key within the transition mapping.
+    input: The input that will be passed to the states to process.
   */
   void input(Input input) {
+    throw_if_state_null();
     try {
-      if (!state) {
-        throw std::runtime_error("FSM state is null.");
-      }
       auto state_transitions = transitions.at(state);
       auto new_state = state_transitions.at(input);
       state->on_exit(input);
@@ -102,6 +91,50 @@ public:
       state->on_enter(input);
     } catch (std::out_of_range &e) {
       throw e;
+    }
+  }
+
+protected:
+  /*
+Description:
+The FSM receives an input and enters the state it's currently set to. This can
+be used to effectively start a process without needing external forces to
+invoke the machine's behaviors.
+
+Parameters:
+  input: The input that will be passed to the state to process.
+*/
+  void start(Input input) {
+    throw_if_state_null();
+    state->on_enter(input);
+  }
+
+  /*
+  Description:
+  The FSM receives an input and exits the state it's currently set to.
+  Afterwards, the state of the FSM is null, effectively communicating that the
+  machine has stopped and will need to be reset.
+
+  Parameters:
+    input: The input that will be passed to the state to process.
+  */
+  void stop(Input input) {
+    throw_if_state_null();
+    state->on_exit(input);
+    state = nullptr;
+  }
+
+  void reset(BaseStateClass *initial_state,
+             std::unordered_map<BaseStateClass *,
+                                std::unordered_map<Input, BaseStateClass *>>
+                 transitions) {
+    state = initial_state;
+    this->transitions = transitions;
+  }
+
+  void throw_if_state_null() {
+    if (!state) {
+      throw std::runtime_error("FSM state is null.");
     }
   }
 };
