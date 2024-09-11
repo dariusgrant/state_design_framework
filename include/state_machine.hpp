@@ -76,7 +76,8 @@ public:
   /*
   Description:
   The FSM receives an input, performs its exit function, transition to next
-  state defined by the transition mapping, and finally enters the state.
+  state defined by the transition mapping, and finally enters the state using
+  the same input.
 
   Parameters:
     input: The input that will be passed to the states to process.
