@@ -1,1 +1,0 @@
-The state design pattern 
