@@ -1,7 +1,6 @@
 #include "../include/state_machine.hpp"
 #include <bits/chrono.h>
 #include <chrono>
-#include <exception>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -13,7 +12,29 @@
 using Clock = std::chrono::system_clock;
 using Time = std::chrono::time_point<Clock>;
 using CalendarDay = std::chrono::year_month_day;
-template <> struct std::hash<CalendarDay> {};
+
+// Custom hash due to built-in hashing support for time objects in the chrono library proposed for C++26
+template <> struct std::hash<CalendarDay> {
+  size_t operator()(const CalendarDay& day) {
+    return std::chrono::sys_days(day).time_since_epoch().count();
+  }
+};
+
+// EntryNotPresent: When an entry do not exist within the timelog.
+class EntryNotPresent : public std::out_of_range {
+public:
+  EntryNotPresent() : std::out_of_range("Entry does not exist.") {}
+  EntryNotPresent(std::string message) : std::out_of_range(message) {}
+};
+
+// EntryInvalidTime: When an entry isn't within the timelog's day.
+class EntryInvalidTime : public std::out_of_range {
+public:
+  EntryInvalidTime()
+      : std::out_of_range(
+            "Entry's start time is outside of the timelog's specified day.") {
+  }
+};
 
 // Timelog: A log containing entries of written content for a specific day.
 class Timelog {
@@ -42,22 +63,6 @@ public:
         : from(from), content(content), metadata() {}
 
     std::string to_string() { return std::string(); }
-  };
-
-  // EntryNotPresent: When an entry do not exist within the timelog.
-  class EntryNotPresent : public std::out_of_range {
-  public:
-    EntryNotPresent() : std::out_of_range("Entry does not exist.") {}
-    EntryNotPresent(std::string message) : std::out_of_range(message) {}
-  };
-
-  // EntryInvalidTime: When an entry isn't within the timelog's day.
-  class EntryInvalidTime : public std::out_of_range {
-  public:
-    EntryInvalidTime()
-        : std::out_of_range(
-              "Entry's start time is outside of the timelog's specified day.") {
-    }
   };
 
 protected:
@@ -161,11 +166,54 @@ class TimeLogJournal {
 
 public:
   TimeLogJournal() {}
+
+  // Create a timelog for a given day.
+  Timelog& create_timelog(CalendarDay day){
+    if(pages.contains(day)) {
+      throw std::runtime_error("Timelog already exists for day");
+    }
+
+    pages[day] = Timelog(day);
+    return pages[day];
+  }
+
+  // Get a timelog for a given day.
+  Timelog& get_timelog(CalendarDay day, bool create = false) {
+    if(!pages.contains(day) && create == true) {
+      return create_timelog(day);
+    } else if(pages.contains(day)) {
+      return pages[day];
+    } else {
+      throw std::runtime_error("Timelog for day do not exist.");
+    }
+  }
+
+  // Delete a timelog for a given day.
+  void delete_timelog(CalendarDay day) {
+    if(pages.contains(day)) {
+      pages.erase(day);
+    }
+  }
 };
 
-class SummaryState {};
-class ViewState {};
-class ModifyState {};
+/*
+TODO: The conceptual model of the FSM is to roughly follow the tasks below:
+Initial state gives a menu to prompt the user to invoke some action. Actions can include:
+  - Selecting a timelog directory to open.
+  - If a predefine directory is open, list the timelogs
+    - User can iterate through those timelogs
+    - When a timelog is selected, the actions of viewing, modifying, or deleting is prompted
+      - If viewing, show contents
+      - If modifying, give buffer of contents and give user access to write
+      - If deleting, remove the timelog
+*/
+
+enum class TimelogJournalInputEnum {};
+using TimelogJournalState = State<TimeLogJournal, TimelogJournalInputEnum>;
+
+class SelectState : TimelogJournalState{};
+class ViewState  : TimelogJournalState{};
+class ModifyState : TimelogJournalState{};
 
 class TimelogFSM {};
 
