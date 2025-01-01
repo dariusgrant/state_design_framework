@@ -26,11 +26,12 @@ using TurnstileFSM = finite_state_machine<Turnstile>;
 
 class LockedState : public TurnstileState {
 public:
-  LockedState(TurnstileFSM* fsm) : state("Locked") {}
+  LockedState() : state("Locked") {}
 
-  void process(TurnstileFSM* fsm, std::any input) override {
-    fsm->get_object()->lock();
-    fsm->get_object()->output("Turnstile in locked state.\n");
+  void process(TurnstileFSM &fsm, std::any input) override {
+    auto turnstile = fsm.get_object();
+    turnstile->lock();
+    turnstile->output("Turnstile in locked state.\n");
   }
 };
 
@@ -56,7 +57,8 @@ public:
 
 class TurnstileMachine : public TurnstileFSM {
 public:
-  TurnstileMachine(Turnstile turnstile = Turnstile()) : TurnstileFSM(turnstile, {LockedState(this)}, "Locked") {};
+  TurnstileMachine(Turnstile turnstile = Turnstile())
+      : TurnstileFSM(turnstile, {LockedState()}, "Locked"){};
 };
 
 /*
