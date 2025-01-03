@@ -1,4 +1,5 @@
 #include "../include/finite_state_machine.hpp"
+#include <functional>
 #include <iostream>
 
 /*
@@ -26,18 +27,19 @@ using TurnstileFSM = finite_state_machine<Turnstile>;
 
 class LockedState : public TurnstileState {
 public:
-  LockedState() : state("Locked") {}
-
-  void process(TurnstileFSM &fsm, std::any input) override {
+  void process(TurnstileFSM &fsm, std::any input) {
     auto turnstile = fsm.get_object();
     turnstile->lock();
     turnstile->output("Turnstile in locked state.\n");
   }
+
+  LockedState() : state("Locked", create_state_proc_func<LockedState>(this)) {}
 };
 
 // class UnlockedState : public TurnstileState {
 // public:
-//   UnlockedState(Turnstile *turnstile) : State(turnstile) {}
+//   UnlockedState() : state("Unlocked",
+//   _create_process_func(&UnlockedState::process, this)) {}
 
 //   void on_enter(TurnstileInputEnum input) override {
 //     object->unlock();
