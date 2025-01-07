@@ -1,6 +1,8 @@
 #include "../include/finite_state_machine.hpp"
+#include <any>
 #include <functional>
 #include <iostream>
+#include <stdexcept>
 
 /*
 Step 1:
@@ -28,6 +30,15 @@ using TurnstileFSM = finite_state_machine<Turnstile>;
 class LockedState : public TurnstileState {
 public:
   void process(TurnstileFSM &fsm, std::any input) {
+    try {
+      auto input_str = std::any_cast<std::string>(input);
+      if (input_str == "Unlock") {
+        fsm.set_state(input_str, "Request to unlock turnstile granted.");
+      }
+    } catch (std::bad_any_cast &e) {
+      
+    }
+
     auto turnstile = fsm.get_object();
     turnstile->lock();
     turnstile->output("Turnstile in locked state.\n");
@@ -36,26 +47,18 @@ public:
   LockedState() : state("Locked", create_state_proc_func<LockedState>(this)) {}
 };
 
-// class UnlockedState : public TurnstileState {
-// public:
-//   UnlockedState() : state("Unlocked",
-//   _create_process_func(&UnlockedState::process, this)) {}
+class UnlockedState : public TurnstileState {
+public:
+  UnlockedState()
+      : state("Unlocked",
+              create_state_proc_func<UnlockedState>(this)) {}
 
-//   void on_enter(TurnstileInputEnum input) override {
-//     object->unlock();
-//     object->output("Turnstile in unlocked state.\n");
-//   }
-//   void on_exit(TurnstileInputEnum input) override {
-//     switch (input) {
-//     case TurnstileInputEnum::Push:
-//       object->output("Turnstile received push while unlocked.\n");
-//       break;
-//     default:
-//       object->output("Turnstile received coin while unlocked.\n");
-//       break;
-//     }
-//   }
-// };
+  void process(TurnstileFSM &fsm, std::any input) {
+    auto turnstile = fsm.get_object();
+    turnstile->unlock();
+    turnstile->output("Turnstile in unlocked state.\n");
+  }
+};
 
 class TurnstileMachine : public TurnstileFSM {
 public:

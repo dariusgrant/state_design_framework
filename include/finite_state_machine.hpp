@@ -5,7 +5,6 @@
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
-#include <vector>
 
 /*
 
@@ -22,7 +21,7 @@ private:
   std::shared_ptr<obj_t> _object;
   state_map _states;
   std::weak_ptr<state<obj_t>> _current_state;
-  std::vector<state_transition<obj_t>> _transitions;
+//   std::vector<state_transition<obj_t>> _transitions;
 
 public:
   finite_state_machine(obj_t object, std::initializer_list<state<obj_t>> states,
@@ -36,14 +35,21 @@ public:
                                initial_state +
                                "\" is not within the set of states.\n");
     }
-    _set_state(initial_state, "Initial State\n");
+    set_state(initial_state, "Initial State\n");
   };
-
-  // constexpr null_state<obj_t>&
 
   std::shared_ptr<obj_t> get_object() { return _object; }
 
   void process(std::any input) { _current_state.lock()->process(*this, input); }
+
+  void set_state(std::string state_name, std::string reason = "") {
+    auto next_state = _get_state(state_name);
+    if (!next_state) {
+      throw std::runtime_error("State \"" + state_name +
+                               "\" does not exist within the machine.\n");
+    }
+    _transition(next_state);
+  }
 
 private:
   std::shared_ptr<state<obj_t>> _get_state(std::string state_name) {
@@ -53,15 +59,11 @@ private:
     return _states[state_name];
   }
 
-  void _set_state(std::string state_name, std::string reason) {
-    auto next_state = _get_state(state_name);
-    if (!next_state) {
-      throw std::runtime_error("State \"" + state_name +
-                               "\" does not exist within the machine.\n");
-    }
-
-    _transitions.push_back(state_transition<obj_t>(
-        _current_state.lock()->get_name(), next_state->get_name(), reason));
+  void _transition(std::shared_ptr<state<obj_t>> next_state) {
+    _current_state.lock()->on_exit(*_object);
     _current_state = next_state;
+    _current_state.lock()->on_enter(*_object);
+    // _transitions.push_back(state_transition<obj_t>(
+    //     _current_state.lock()->get_name(), next_state->get_name(), reason));
   }
 };

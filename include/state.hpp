@@ -5,7 +5,25 @@
 #include <stdexcept>
 #include <string>
 
+template <class obj_t>
+inline constexpr auto throw_on_access_not_implemented(std::string state_name, std::string access_name) {
+  return [=](obj_t &obj) {
+    throw std::runtime_error(
+        "[" + state_name + "_State] No implementation for `state::_on_" + access_name + "_func`");
+  };
+}
+
+template <class fsm_t>
+inline constexpr auto
+throw_process_not_implemented(std::string state_name) {
+  return [=](fsm_t &fsm, std::any input) {
+    throw std::runtime_error("[" + state_name +
+                             " State] No implementation for `state::_process_func`");
+  };
+}
 template <class obj_t> class finite_state_machine;
+
+template <class obj_t> using on_access_func = std::function<void(obj_t &obj)>;
 
 // A generic process function when operating on an instance of obj_t.
 template <class obj_t>
@@ -24,17 +42,18 @@ public:
 
 protected:
   std::string _name;
+  on_access_func<obj_t> _on_enter_func;
+  on_access_func<obj_t> _on_exit_func;
   state_proc_func _process_func;
 
 public:
   state(std::string name)
       : _name(name),
-        _process_func([name](finite_state_machine<obj_t> &, std::any input) {
-          throw std::runtime_error(
-              "No implementation for `state::process_func` for state \"" +
-              name + "\"");
-        }) {}
+        _on_enter_func(throw_on_access_not_implemented<obj_t>(name, "enter")),
+        _on_exit_func(throw_on_access_not_implemented<obj_t>(name, "exit")),
+        _process_func(throw_process_not_implemented<finite_state_machine<obj_t>>(name)) {}
 
+  // TODO: Modify constructor to include access functions.
   state(std::string name, state_proc_func process_func)
       : _name(name), _process_func(process_func) {}
 
@@ -51,6 +70,11 @@ public:
   };
 
   std::string get_name() const { return _name; }
+
+  void on_enter(obj_t &obj) { _on_enter_func(obj); }
+
+  void on_exit(obj_t &obj) { _on_exit_func(obj); }
+
   /*
   What should happened when the State is entered/started.
     input: Input of any type.
@@ -68,5 +92,5 @@ state_t::state_proc_func create_state_proc_func(state_ptr state) {
 
 template <class obj_t> class null_state final : public state<obj_t> {
 public:
-  null_state() : state<obj_t>("Null"){};
+  null_state() : state<obj_t>("Null") {};
 };
