@@ -1,9 +1,8 @@
 #include "../include/finite_state_machine.hpp"
 #include <any>
-#include <functional>
 #include <iostream>
-#include <stdexcept>
 
+enum class TurnstileInputEnum { Coin, Push };
 /*
 Step 1:
 Create the object that will be manipulated by the FSM.
@@ -17,94 +16,97 @@ public:
 
   void lock() { is_locked = true; }
   void unlock() { is_locked = false; }
-  void output(std::string message) { std::cout << message; }
 };
 
-/*
-Step 3:
-Create the set of states the FSM will use to transition between.
-*/
 using TurnstileState = state<Turnstile>;
 using TurnstileFSM = finite_state_machine<Turnstile>;
 
 class LockedState : public TurnstileState {
 public:
-  void process(TurnstileFSM &fsm, std::any input) {
-    try {
-      auto input_str = std::any_cast<std::string>(input);
-      if (input_str == "Unlock") {
-        fsm.set_state(input_str, "Request to unlock turnstile granted.");
-      }
-    } catch (std::bad_any_cast &e) {
-      
-    }
+  LockedState()
+      : state("Locked",
+              create_on_access_func<LockedState>(this, access_type::enter),
+              create_on_access_func<LockedState>(this, access_type::exit),
+              create_state_proc_func<LockedState>(this)) {}
 
-    auto turnstile = fsm.get_object();
-    turnstile->lock();
-    turnstile->output("Turnstile in locked state.\n");
+  void on_enter(Turnstile &turnstile) {
+    turnstile.lock();
+    std::cout << "Turnstile in locked state.\n";
   }
 
-  LockedState() : state("Locked", create_state_proc_func<LockedState>(this)) {}
+  void on_exit(Turnstile &turnstile) {
+    std::cout << "Turnstile exiting locked state.\n";
+  }
+
+  void process(TurnstileFSM &fsm, std::any input) {
+    try {
+      auto turnstile_input = std::any_cast<TurnstileInputEnum>(input);
+      if (turnstile_input == TurnstileInputEnum::Coin) {
+        fsm.set_state("Unlocked", "Request to unlock turnstile granted.");
+      }
+    } catch (std::bad_any_cast &e) {
+      std::cout << "Bad input for locked state";
+    }
+  }
 };
 
 class UnlockedState : public TurnstileState {
 public:
   UnlockedState()
       : state("Unlocked",
+              create_on_access_func<UnlockedState>(this, access_type::enter),
+              create_on_access_func<UnlockedState>(this, access_type::exit),
               create_state_proc_func<UnlockedState>(this)) {}
 
+  void on_enter(Turnstile &turnstile) {
+    turnstile.unlock();
+    std::cout << "Turnstile in unlocked state.\n";
+  }
+
+  void on_exit(Turnstile &turnstile) {
+    std::cout << "Turnstile exiting unlocked state.\n";
+  }
+
   void process(TurnstileFSM &fsm, std::any input) {
-    auto turnstile = fsm.get_object();
-    turnstile->unlock();
-    turnstile->output("Turnstile in unlocked state.\n");
+    try {
+      auto turnstile_input = std::any_cast<TurnstileInputEnum>(input);
+      if (turnstile_input == TurnstileInputEnum::Push) {
+        fsm.set_state("Locked", "Request to unlock turnstile granted.");
+      } else {
+      }
+    } catch (std::bad_any_cast &e) {
+      std::cout << "Bad input for unlocked state";
+    }
   }
 };
 
 class TurnstileMachine : public TurnstileFSM {
+private:
 public:
   TurnstileMachine(Turnstile turnstile = Turnstile())
-      : TurnstileFSM(turnstile, {LockedState()}, "Locked"){};
+      : TurnstileFSM(turnstile, {LockedState(), UnlockedState()}, "Locked") {}
+
+  void push() {
+    process(std::make_any<TurnstileInputEnum>(TurnstileInputEnum::Push));
+  }
+
+  void insert_coin() {
+    process(std::make_any<TurnstileInputEnum>(TurnstileInputEnum::Coin));
+  }
 };
 
 /*
-Step 4:
-Create the FSM.
-*/
-// class TurnstileFSM : public Turnstile, FSM<TurnstileState,
-// TurnstileInputEnum> { private:
-//   LockedState locked_state;
-//   UnlockedState unlocked_state;
-
-// public:
-//   TurnstileFSM() : locked_state(this), unlocked_state(this) {
-//     std::unordered_map<TurnstileInputEnum, TurnstileState *>
-//     locked_transitions{
-//         {TurnstileInputEnum::Coin, &unlocked_state},
-//         {TurnstileInputEnum::Push, &locked_state}};
-
-//     std::unordered_map<TurnstileInputEnum, TurnstileState *>
-//         unlocked_transitions{{TurnstileInputEnum::Coin, &unlocked_state},
-//                              {TurnstileInputEnum::Push, &locked_state}};
-
-//     std::unordered_map<TurnstileState *,
-//                        std::unordered_map<TurnstileInputEnum, TurnstileState
-//                        *>>
-//         transitions = {{&locked_state, locked_transitions},
-//                        {&unlocked_state, unlocked_transitions}};
-
-//     reset(&locked_state, transitions);
-//     start(TurnstileInputEnum::None);
-//   }
-
-//   void push() { input(TurnstileInputEnum::Push); }
-//   void insert_coin() { input(TurnstileInputEnum::Coin); }
-// };
-
-/*
 Step 5:
-
 */
+struct Person {
+  void push(TurnstileMachine &t) { t.push(); }
+  void insert_coin(TurnstileMachine &t) { t.insert_coin(); }
+};
+
 int main() {
   auto turnstile = TurnstileMachine();
-  turnstile.process(nullptr);
+  Person p;
+  p.push(turnstile);
+  p.insert_coin(turnstile);
+  p.push(turnstile);
 }

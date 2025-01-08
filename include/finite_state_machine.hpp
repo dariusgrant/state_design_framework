@@ -21,7 +21,7 @@ private:
   std::shared_ptr<obj_t> _object;
   state_map _states;
   std::weak_ptr<state<obj_t>> _current_state;
-//   std::vector<state_transition<obj_t>> _transitions;
+  //   std::vector<state_transition<obj_t>> _transitions;
 
 public:
   finite_state_machine(obj_t object, std::initializer_list<state<obj_t>> states,
@@ -30,11 +30,7 @@ public:
     for (auto s : states) {
       _states[s.get_name()] = std::make_shared<state<obj_t>>(s);
     }
-    if (!_get_state(initial_state)) {
-      throw std::runtime_error("The specified initial state \"" +
-                               initial_state +
-                               "\" is not within the set of states.\n");
-    }
+
     set_state(initial_state, "Initial State\n");
   };
 
@@ -61,6 +57,7 @@ private:
 
   void _transition(std::shared_ptr<state<obj_t>> next_state) {
     _current_state.lock()->on_exit(*_object);
+    _current_state.reset();
     _current_state = next_state;
     _current_state.lock()->on_enter(*_object);
     // _transitions.push_back(state_transition<obj_t>(

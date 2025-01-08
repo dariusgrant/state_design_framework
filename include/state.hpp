@@ -6,24 +6,26 @@
 #include <string>
 
 template <class obj_t>
-inline constexpr auto throw_on_access_not_implemented(std::string state_name, std::string access_name) {
+inline constexpr auto throw_on_access_not_implemented(std::string state_name,
+                                                      std::string access_name) {
   return [=](obj_t &obj) {
-    throw std::runtime_error(
-        "[" + state_name + "_State] No implementation for `state::_on_" + access_name + "_func`");
+    throw std::runtime_error("[" + state_name +
+                             "_State] No implementation for `state::_on_" +
+                             access_name + "_func`");
   };
 }
 
 template <class fsm_t>
-inline constexpr auto
-throw_process_not_implemented(std::string state_name) {
+inline constexpr auto throw_process_not_implemented(std::string state_name) {
   return [=](fsm_t &fsm, std::any input) {
-    throw std::runtime_error("[" + state_name +
-                             " State] No implementation for `state::_process_func`");
+    throw std::runtime_error(
+        "[" + state_name +
+        " State] No implementation for `state::_process_func`");
   };
 }
 template <class obj_t> class finite_state_machine;
 
-template <class obj_t> using on_access_func = std::function<void(obj_t &obj)>;
+template <class obj_t> using access_func = std::function<void(obj_t &obj)>;
 
 // A generic process function when operating on an instance of obj_t.
 template <class obj_t>
@@ -39,11 +41,12 @@ template <class obj_t> class state {
 public:
   // A state specific process function when operating on an instance of obj_t.
   using state_proc_func = proc_func<obj_t>;
+  using on_access_func = access_func<obj_t>;
 
 protected:
   std::string _name;
-  on_access_func<obj_t> _on_enter_func;
-  on_access_func<obj_t> _on_exit_func;
+  on_access_func _on_enter_func;
+  on_access_func _on_exit_func;
   state_proc_func _process_func;
 
 public:
@@ -51,11 +54,13 @@ public:
       : _name(name),
         _on_enter_func(throw_on_access_not_implemented<obj_t>(name, "enter")),
         _on_exit_func(throw_on_access_not_implemented<obj_t>(name, "exit")),
-        _process_func(throw_process_not_implemented<finite_state_machine<obj_t>>(name)) {}
+        _process_func(
+            throw_process_not_implemented<finite_state_machine<obj_t>>(name)) {}
 
-  // TODO: Modify constructor to include access functions.
-  state(std::string name, state_proc_func process_func)
-      : _name(name), _process_func(process_func) {}
+  state(std::string name, on_access_func on_enter_func,
+        on_access_func on_exit_func, state_proc_func process_func)
+      : _name(name), _on_enter_func(on_enter_func), _on_exit_func(on_exit_func),
+        _process_func(process_func) {}
 
   struct hash {
     std::size_t operator()(const state<obj_t> &s) const {
@@ -84,6 +89,16 @@ public:
   };
 };
 
+enum class access_type { enter, exit };
+
+template <class state_t, class state_ptr>
+state_t::on_access_func create_on_access_func(state_ptr state,
+                                              access_type access) {
+  auto access_func =
+      access == access_type::enter ? &state_t::on_enter : &state_t::on_exit;
+  return std::bind(access_func, state, std::placeholders::_1);
+}
+
 template <class state_t, class state_ptr>
 state_t::state_proc_func create_state_proc_func(state_ptr state) {
   return std::bind(&state_t::process, state, std::placeholders::_1,
@@ -92,5 +107,15 @@ state_t::state_proc_func create_state_proc_func(state_ptr state) {
 
 template <class obj_t> class null_state final : public state<obj_t> {
 public:
-  null_state() : state<obj_t>("Null") {};
+  null_state()
+      : state<obj_t>(
+            "Null", create_on_access_func<null_state>(this, access_type::enter),
+            create_on_access_func<null_state>(this, access_type::exit),
+            create_state_proc_func<null_state>(this)){};
+
+  void on_enter(obj_t &_) {}
+
+  void on_exit(obj_t &_) {}
+
+  void process(finite_state_machine<obj_t> &_1, std::any _2) {};
 };
