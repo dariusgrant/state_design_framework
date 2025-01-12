@@ -34,8 +34,6 @@ public:
     set_state(initial_state, "Initial State\n");
   };
 
-  std::shared_ptr<obj_t> get_object() { return _object; }
-
   void process(std::any input) { _current_state.lock()->process(*this, input); }
 
   void set_state(std::string state_name, std::string reason = "") {
