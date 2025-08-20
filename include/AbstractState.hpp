@@ -1,57 +1,47 @@
+#pragma once
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <typeindex>
 #include <unordered_map>
 #include <variant>
 
 namespace fsm {
-// Get the type index of pointer to State type.
-// This allows classes to forward declare for cyclic dependencies.
-template <class State>
-auto GetStateTypeIndex =
-    []() -> std::type_index { return std::type_index(typeid(State *)); };
+using UnhandledParameters = std::false_type::type;
 
-template <class... StateTypes>
-using StateMap =
-    std::unordered_map<std::type_index, std::variant<StateTypes...>>;
-
-class InvalidStateArgument : public std::invalid_argument {
+template <typename IsTerminal> class AbstractState {
+protected:
 public:
-  InvalidStateArgument(std::string s)
-      : std::invalid_argument("Failed to handle arguments in state " + s) {}
-};
+  static constexpr bool is_terminal = IsTerminal::value;
 
-class StartedFSM : public std::logic_error {
-public:
-  StartedFSM() : std::logic_error("FSM has already been started") {}
-};
-
-class UnstartedFSM : public std::logic_error {
-public:
-  UnstartedFSM() : std::logic_error("FSM hasn't been started") {}
-};
-
-class AbstractState {
-public:
   template <class ObjectType, typename T>
   void enter(ObjectType &object, T input) {
-    throw InvalidStateArgument("enter");
+    static_assert(UnhandledParameters::value,
+                  "`enter` not defined for parameter list.");
   }
 
   template <class ObjectType, typename T>
   void exit(const ObjectType &object, T input) {
-    throw InvalidStateArgument("exit");
+    if constexpr (is_terminal) {
+      return;
+    }
+    static_assert(UnhandledParameters::value,
+                  "`exit` not defined for parameter list.");
   }
 
-  template <class ObjectType, typename T, class... StateTypes>
-  std::variant<StateTypes...> &
-  transition(const ObjectType &object, T input,
-             const StateMap<StateTypes...> &states) {
-    throw InvalidStateArgument("transition");
+  template <class ObjectType, typename T>
+  std::type_index transition(const ObjectType &object, T input) {
+    static_assert(UnhandledParameters::value,
+                  "`transition` not defined for parameter list.");
+    return std::type_index(typeid(this));
   }
 
   template <typename... Ts> void configure(Ts... args) {
-    throw InvalidStateArgument("configuration");
+    static_assert(UnhandledParameters::value,
+                  "`configure` not defined for parameter list.");
   }
 };
+
+using NonTerminalState = AbstractState<std::false_type>;
+using TerminalState = AbstractState<std::true_type>;
 }; // namespace fsm

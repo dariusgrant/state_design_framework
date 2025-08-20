@@ -1,7 +1,13 @@
 #include "AbstractState.hpp"
+#include "utility/Log.hpp"
+#include "utility/StateType.hpp"
+#include "utility/String.hpp"
+#include <future>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <variant>
+
 /*
 PROTOTYPE 2
 
@@ -43,8 +49,7 @@ However, the limitation is only philosophical and cannot be enforced. There are
 also valid use-cases where state may want to be preserved through, such as
 simply keeping a counter.
 
-`transition()` references a mapping of states as a parameter. The mapping SHOULD
-be the only reference to other states
+`transition()` must return the type index of a state that's apart of the FSM.
 
 Make StopLight::public fsm<LightState>
     - What makes a light state a light state
@@ -53,30 +58,59 @@ Make StopLight::public fsm<LightState>
 
 namespace fsm {
 template <class ObjType, class... StateTypes> class FiniteStateMachine {
-  static_assert((std::is_base_of_v<AbstractState, StateTypes> && ...),
+  static_assert(((std::is_base_of_v<NonTerminalState, StateTypes> ||
+                  std::is_base_of_v<TerminalState, StateTypes>) &&
+                 ...),
                 "The state does not derived from class `AbstractState`");
 
+public:
+  static constexpr bool has_terminal_state =
+      (std::is_base_of_v<fsm::TerminalState, StateTypes> || ...);
+
 private:
-  ObjType object;
+  ObjType _object;
   StateMap<StateTypes...> _states;
-  std::variant<StateTypes...> _curr_state;
+  std::variant<StateTypes...> _current_state;
+  std::shared_future<ObjType> _after_enter;
   bool _started;
+  bool _terminated;
+  std::function<void(std::shared_future<ObjType>)> _future_object_callback;
+  // TODO move to a stats struct
+  uint64_t _invalid_shared_state_count;
 
 public:
   template <typename... ObjArgTypes>
   FiniteStateMachine(ObjArgTypes... obj_args)
-      : object(obj_args...),
+      : _object(obj_args...),
         _states({{GetStateTypeIndex<StateTypes>(),
                   std::variant<StateTypes...>(StateTypes())}...}),
-        _started(false) {}
+        _started(false), _terminated(false), _future_object_callback(),
+        _invalid_shared_state_count(0) {}
+
+  // Accessors
+  const ObjType &get() const { return _object; }
+
+  // Queries
+  constexpr bool is_terminable() const { return has_terminal_state; }
+  const bool is_terminated() const { return _terminated; }
+
+  // Modifiers
+  FiniteStateMachine &
+  set_future_object_cb(std::function<void(std::shared_future<ObjType>)> cb) {
+    // debug_log(*this, __func__,
+    //           key_value_string("_future_object_callback",
+    //           typeid(cb).name()));
+    _future_object_callback = cb;
+    return *this;
+  }
 
   template <typename InputType> FiniteStateMachine &start(InputType input) {
+    // debug_log(*this, __func__, key_value_string("input", input));
     if (_started) {
-      throw StartedFSM();
+      throw std::logic_error("FSM has already been started");
     }
-    std::visit([this, &input](auto &s) { return s.enter(object, input); },
-               _curr_state);
-    _started = true;
+
+    _enter_state(input);
     return *this;
   }
 
@@ -88,18 +122,16 @@ public:
   }
 
   template <typename T> FiniteStateMachine &process(T input) {
+    // debug_log(*this, __func__, key_value_string("input", input));
     if (!_started) {
-      throw UnstartedFSM();
+      throw std::logic_error("FSM hasn't been started");
     }
-    _curr_state = std::visit(
-        [this, &input](auto &s) {
-          auto &obj = std::as_const(object);
-          s.exit(obj, input);
-          return s.transition(std::as_const(object), input, _states);
-        },
-        _curr_state);
-    std::visit([this, &input](auto &s) { s.enter(object, input); },
-               _curr_state);
+
+    if (_terminated) {
+      throw std::runtime_error("FSM already terminated.");
+    }
+    _exit_state(input);
+    _enter_state(input);
     return *this;
   }
 
@@ -109,6 +141,53 @@ public:
     return *this;
   }
 
-  const ObjType &get_object() { return object; }
+private:
+  template <typename T> void _enter_state(T &input) {
+    // debug_log(*this, __func__, key_value_string("input", input));
+    std::shared_future<ObjType> sf;
+    std::visit(
+        [this, &input, &sf](auto &s) {
+          sf = std::async(std::launch::deferred, [&]() -> ObjType {
+            s.enter(_object, input);
+            if (s.is_terminal) {
+              _terminated = true;
+            }
+            return _object;
+          });
+
+          // If there is a callback defined,
+          // then pass the shared future object
+          // to it. This is to let the user
+          // decide how to handle the distribution
+          // to other objects, potentially in other
+          // threads.
+          if (_future_object_callback) {
+            _future_object_callback(sf);
+          }
+        },
+        _current_state);
+
+    if (!_started) [[unlikely]] {
+      _started = true;
+    }
+
+    if (!sf.valid()) [[unlikely]] {
+      _invalid_shared_state_count += 1;
+    } else {
+      _object = sf.get();
+    }
+  }
+
+  template <typename T> void _exit_state(T &input) {
+    // debug_log(*this, __func__, key_value_string("input", input));
+    _current_state = std::visit(
+        [this, &input](auto &s) {
+          auto &obj = std::as_const(_object);
+          s.exit(obj, input);
+          auto next_state_type = s.transition(std::as_const(_object), input);
+          return _states[next_state_type];
+        },
+        _current_state);
+  }
 };
 }; // namespace fsm
