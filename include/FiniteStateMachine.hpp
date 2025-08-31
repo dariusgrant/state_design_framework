@@ -58,6 +58,7 @@ Make StopLight::public fsm<LightState>
 
 namespace fsm {
 template <class ObjType, class... StateTypes> class FiniteStateMachine {
+  // Reject parameter type that isn't a state.
   static_assert(((std::is_base_of_v<NonTerminalState, StateTypes> ||
                   std::is_base_of_v<TerminalState, StateTypes>) &&
                  ...),
@@ -68,13 +69,18 @@ public:
       (std::is_base_of_v<fsm::TerminalState, StateTypes> || ...);
 
 private:
-  ObjType _object;
-  StateMap<StateTypes...> _states;
-  std::variant<StateTypes...> _current_state;
-  std::shared_future<ObjType> _after_enter;
-  bool _started;
-  bool _terminated;
-  std::function<void(std::shared_future<ObjType>)> _future_object_callback;
+  ObjType _object;                 // The object that's managed by the FSM
+  StateMap<StateTypes...> _states; // The set of states the object can be in
+  std::variant<StateTypes...>
+      _current_state; // The current state the object is in
+  bool _started;      // Has the FSM started?
+  bool _terminated;   // Has the FSM been terminated?
+  std::shared_future<ObjType> _after_enter; // A future copy of the object after
+                                            // a state completion event
+  std::function<void(std::shared_future<ObjType>)>
+      _future_object_callback; // The callback for handling the future copies of
+                               // the object upon state completion
+
   // TODO move to a stats struct
   uint64_t _invalid_shared_state_count;
 
