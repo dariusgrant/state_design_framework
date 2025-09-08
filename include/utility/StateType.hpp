@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+#include <functional>
 #include <typeindex>
 #include <unordered_map>
 #include <variant>
@@ -11,10 +13,11 @@ template <class State>
 auto GetStateTypeIndex =
     []() -> std::type_index { return std::type_index(typeid(State *)); };
 
-template <class... StateTypes>
-using StateMap =
-    std::unordered_map<std::type_index, std::variant<StateTypes...>>;
+template <class FirstStateType, class... RemainingStateTypes>
+using StateVariantType = std::variant<FirstStateType, RemainingStateTypes...>;
 
-template <class... StateTypes>
-using StateMapIt = typename StateMap<StateTypes...>::iterator;
+template <class FirstStateType, class... RemainingStateTypes>
+using StateMap = std::unordered_map<
+    std::type_index, StateVariantType<FirstStateType, RemainingStateTypes...>>;
+
 } // namespace fsm

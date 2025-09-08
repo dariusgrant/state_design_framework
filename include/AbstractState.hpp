@@ -14,14 +14,14 @@ protected:
 public:
   static constexpr bool is_terminal = IsTerminal::value;
 
-  template <class ObjectType, typename T>
-  void enter(ObjectType &object, T input) {
+  template <class ObjectType, typename... T>
+  void enter(ObjectType &object, T &&...inputs) {
     static_assert(UnhandledParameters::value,
                   "`enter` not defined for parameter list.");
   }
 
-  template <class ObjectType, typename T>
-  void exit(const ObjectType &object, T input) {
+  template <class ObjectType, typename... T>
+  void exit(const ObjectType &object, T &&...inputs) {
     if constexpr (is_terminal) {
       return;
     }
@@ -29,10 +29,11 @@ public:
                   "`exit` not defined for parameter list.");
   }
 
-  template <class ObjectType, typename T>
-  std::type_index transition(const ObjectType &object, T input) {
+  template <class ObjectType, typename... T>
+  auto transition(const ObjectType &object, T &&...inputs) {
     static_assert(UnhandledParameters::value,
                   "`transition` not defined for parameter list.");
+
     return std::type_index(typeid(this));
   }
 
