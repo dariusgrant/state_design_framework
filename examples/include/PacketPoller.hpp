@@ -52,23 +52,35 @@
 //   SimTransportLayer transport_layer;
 //   SimApplicationLayer application_layer;
 // };
-class PollState : public fsm::NonTerminalState {
+class PollState : public fsm::NonTerminalState<uint64_t> {
 private:
-  std::random_device rd; // No copyable - thus the rule of 5 is applied here
+  std::random_device rd; // No copyable - thus the rule of 3 is applied here
   std::mt19937 gen;
   std::uniform_int_distribution<uint64_t> dist;
 
 public:
-  PollState() : fsm::NonTerminalState(), rd(), gen(rd()), dist(0, UINT64_MAX) {}
-  PollState(const PollState &a) {}
-  PollState &operator=(const PollState &a) { return *this; }
+  PollState(const shared_ptr_t &obj)
+      : fsm::NonTerminalState<obj_t>(obj), rd(), gen(rd()),
+        dist(0, UINT64_MAX) {}
+  PollState(const PollState &a) : fsm::NonTerminalState<obj_t>(a) { *this = a; }
+  PollState(PollState &&a) : fsm::NonTerminalState<obj_t>(std::move(a)) {}
+  PollState &operator=(const PollState &a) {
+    this->_obj = a._obj;
+    this->gen = a.gen;
+    this->dist = a.dist;
+    return *this;
+  }
+  PollState &operator=(PollState &&a) {
+    std::swap(*this, a);
+    return *this;
+  }
+  ~PollState() {}
 
-  void enter(uint64_t &x) { x = dist(gen); }
-  void exit(const uint64_t &x) {}
+public:
+  void enter() { *_obj.lock() = dist(gen); }
+  void exit() {}
 
-  std::type_index transition(const uint64_t &x) {
-    return fsm::GetStateTypeIndex<PollState>();
-  };
+  std::type_index transition() { return fsm::GetStateTypeIndex<PollState>(); };
 };
 
 using SimPacketPoller = fsm::FiniteStateMachine<uint64_t, PollState>;

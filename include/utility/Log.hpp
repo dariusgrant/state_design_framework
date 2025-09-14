@@ -1,17 +1,11 @@
 #pragma once
 
+#include "Environment.hpp"
 #include <iostream>
 #include <mutex>
 #include <string>
 #include <thread>
-
 namespace fsm {
-#ifndef NDEBUG
-constexpr bool DEBUG_MODE = true;
-#else
-constexpr bool DEBUG_MODE = false;
-#endif
-
 std::mutex mut;
 
 template <typename Obj>
