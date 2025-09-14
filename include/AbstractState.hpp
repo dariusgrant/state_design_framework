@@ -1,6 +1,7 @@
 #pragma once
 #include "utility/Environment.hpp"
 #include "utility/StateType.hpp"
+#include <cstddef>
 #include <memory>
 #include <type_traits>
 #include <typeindex>
@@ -8,6 +9,10 @@
 
 namespace fsm {
 using UnhandledParameters = std::false_type::type;
+
+template <class _T> struct StateIdentity {
+  using type = _T;
+};
 
 template <class ObjType, typename IsTerminal> class AbstractState {
 public:
@@ -26,6 +31,14 @@ public:
   AbstractState(AbstractState &s) : _obj(s._obj) {}
   AbstractState(const AbstractState &s) : _obj(s._obj) {}
   ~AbstractState() {}
+
+  obj_t &get_object() {
+    if (_obj.expired()) {
+      throw;
+    }
+    return *_obj.lock();
+  }
+
   template <typename... T> void enter(T... inputs) {
     // if (!_obj.expired()) {
     //   _enter_impl(*_obj.lock(), std::forward<T>(inputs)...);
@@ -38,13 +51,13 @@ public:
     // }
   }
 
-  template <typename... T>
-  [[nodiscard]] std::type_index transition(T... inputs) {
+  template <class _T, typename... _Args>
+  [[nodiscard]] StateIdentity<_T> transition(_Args... inputs) {
     // if (!_obj.expired()) {
     //   return _transition_impl(std::as_const(*_obj.lock()),
     //                           std::forward<T>(inputs)...);
     // }
-    return std::type_index(typeid(nullptr));
+    return StateIdentity<std::nullptr_t>();
   }
 
   template <typename... Ts> void configure(Ts... args) {
@@ -84,6 +97,4 @@ using NonTerminalState = AbstractState<ObjType, std::false_type>;
 
 template <class ObjType>
 using TerminalState = AbstractState<ObjType, std::true_type>;
-
-template <class ObjType> using MonoNonTerminalState = NonTerminalState<ObjType>;
 }; // namespace fsm

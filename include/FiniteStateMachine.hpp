@@ -61,9 +61,6 @@ Make StopLight::public fsm<LightState>
 
 namespace fsm {
 template <class _Obj, class _S0, class... _Sn> class FiniteStateMachine {
-  // friend NonTerminalState<ObjType>;
-  // friend TerminalState<ObjType>;
-
   static_assert(std::is_constructible_v<_S0, _S0> &&
                 (std::is_constructible_v<_Sn, _Sn> && ...));
 
@@ -85,8 +82,8 @@ private:
   std::shared_ptr<_Obj> _object; // The object that's managed by the FSM
   // StateMap<_S0, _Sn...>
   StateTuple<_S0, _Sn...> _states; // The set of states the object can be in
-  StateVariantType<_S0, _Sn...>
-      _current_state;                    // The current state the object is in
+  StateVariantType<_S0 *, _Sn *...>
+      _current_state;                    // Variants of state pointers
   bool _started;                         // Has the FSM started?
   bool _terminated;                      // Has the FSM been terminated?
   std::shared_future<_Obj> _after_enter; // A future copy of the object after
@@ -100,8 +97,11 @@ public:
   FiniteStateMachine(ObjArgTypes... obj_args)
       : _object(std::make_shared<_Obj>(obj_args...)),
         _states(std::make_tuple(_S0(_object), _Sn(_object)...)),
-        _current_state(std::get<0>(_states)), _started(false),
-        _terminated(false), _future_object_callback() {}
+        _current_state(&std::get<0>(_states)), _started(false),
+        _terminated(false), _future_object_callback() {
+    // std::visit([](auto &s) { std::cout << typeid(s).name() << "\n"; },
+    //            _current_state);
+  }
 
   // Accessors
   const _Obj &get() const { return *_object; }
@@ -149,9 +149,9 @@ public:
     if (_terminated) {
       throw std::runtime_error("FSM already terminated.");
     }
-    _exit_state(std::forward<T>(inputs)...);
-    _transition_state(std::forward<T>(inputs)...);
-    _enter_state(std::forward<T>(inputs)...);
+    _exit_state(inputs...);
+    _transition_state(inputs...);
+    _enter_state(inputs...);
     return *this;
   }
 
@@ -162,8 +162,8 @@ private:
     std::visit(
         [this, &inputs..., &sf](auto &s) {
           sf = std::async(std::launch::deferred, [&]() -> _Obj {
-            s.enter(std::forward<T>(inputs)...);
-            if (s.is_terminal) {
+            s->enter(inputs...);
+            if (s->is_terminal) {
               _terminated = true;
             }
             return *_object;
@@ -186,17 +186,17 @@ private:
 
   template <typename... T> void _exit_state(T... inputs) {
     // debug_log(*this, __func__, key_value_string("input", input));
-    std::visit(
-        [this, &inputs...](auto &s) { s.exit(std::forward<T>(inputs)...); },
-        _current_state);
+    std::visit([this, &inputs...](auto &s) { s->exit(inputs...); },
+               _current_state);
   }
 
   template <typename... T> void _transition_state(T... inputs) {
     // debug_log(*this, __func__, key_value_string("input", input));
     _current_state = std::visit(
         [this, &inputs...](auto &s) {
-          auto next_state_type = s.transition(std::forward<T>(inputs)...);
-          return _states.find(next_state_type);
+          auto next_state_identity = s->transition(inputs...);
+          return &std::get<typename decltype(next_state_identity)::type>(
+              _states);
         },
         _current_state);
   }

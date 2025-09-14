@@ -59,28 +59,22 @@ private:
   std::uniform_int_distribution<uint64_t> dist;
 
 public:
-  PollState(const shared_ptr_t &obj)
+  PollState(const PollState::shared_ptr_t &obj)
       : fsm::NonTerminalState<obj_t>(obj), rd(), gen(rd()),
         dist(0, UINT64_MAX) {}
   PollState(const PollState &a) : fsm::NonTerminalState<obj_t>(a) { *this = a; }
-  PollState(PollState &&a) : fsm::NonTerminalState<obj_t>(std::move(a)) {}
   PollState &operator=(const PollState &a) {
     this->_obj = a._obj;
     this->gen = a.gen;
     this->dist = a.dist;
     return *this;
   }
-  PollState &operator=(PollState &&a) {
-    std::swap(*this, a);
-    return *this;
-  }
-  ~PollState() {}
 
 public:
   void enter() { *_obj.lock() = dist(gen); }
   void exit() {}
 
-  std::type_index transition() { return fsm::GetStateTypeIndex<PollState>(); };
+  auto transition() { return fsm::StateIdentity<PollState>(); };
 };
 
 using SimPacketPoller = fsm::FiniteStateMachine<uint64_t, PollState>;

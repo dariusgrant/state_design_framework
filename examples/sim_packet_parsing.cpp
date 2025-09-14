@@ -1,20 +1,26 @@
-// #include "../examples/include/LoadBalancer.hpp"
+#include "../examples/include/LoadBalancer.hpp"
 #include "../examples/include/PacketPoller.hpp"
 #include "../include/FiniteStateMachine.hpp"
 
 int main(int argc, const char **argv) {
-  // auto p = std::make_shared<uint64_t>();
-  // std::variant<PollState> a{PollState(p)};
-  // std::cout << a.valueless_by_exception();
-  auto poller = SimPacketPoller(5);
-  // auto balancer = SimLoadBalancer<3>();
+  // auto a = std::make_shared<std::array<std::vector<uint64_t>, 3>>();
+  // Distribute<3> d(a);
+  // d.enter(std::vector<uint64_t>{5}, {0, 0, 0});
+  auto poller = SimPacketPoller();
+  auto balancer = SimLoadBalancer<3>();
   poller.start();
-  // balancer.start();
+  balancer.start();
 
-  // for (auto i = 0; i < 10; ++i) {
-  //   std::cout << poller.get() << "\n";
-  //   poller.process();
-  // balancer.process(std::vector{poller.get()}, balancer.load_counts());
-  // balancer.print_load_counts();
-  // }
+  // poller.set_future_object_cb([&balancer](std::shared_future<uint64_t> t) {
+  //   auto pkt = t.get();
+  //   std::cout << "Balancing: " << pkt << "\n";
+  //   balancer.process(std::vector<uint64_t>{pkt}, balancer.load_counts());
+  // });
+
+  for (auto i = 0; i < 10; ++i) {
+    std::cout << poller.get() << "\n";
+    poller.process();
+    balancer.process(std::vector{poller.get()});
+    balancer.print_load_counts();
+  }
 }
