@@ -66,7 +66,11 @@ struct AbstractProcessStrategy {
   template <typename... _Args>
   constexpr static void
   process(callback_t<_Args...> enter, callback_t<_Args...> exit,
-          callback_t<_Args...> transition, _Args... args) {};
+          callback_t<_Args...> transition, _Args... args) {
+    static_assert(
+        std::false_type::value,
+        "`AbstractProcessStrategy` cannot be used as a process strategy.");
+  };
 };
 
 struct DefaultProcessStrategy : public AbstractProcessStrategy {
@@ -74,7 +78,6 @@ struct DefaultProcessStrategy : public AbstractProcessStrategy {
   constexpr static void
   process(callback_t<_Args...> enter, callback_t<_Args...> exit,
           callback_t<_Args...> transition, _Args... args) {
-    std::cout << "Default Process Strat\n";
     exit(args...);
     transition(args...);
     enter(args...);
@@ -112,7 +115,6 @@ private:
   std::function<void(std::shared_future<_Obj>)>
       _future_object_callback; // The callback for handling the future copies of
                                // the object upon state completion
-  AbstractProcessStrategy *_process_strategy;
 
 public:
   template <typename... ObjArgTypes>
@@ -120,8 +122,7 @@ public:
       : _object(std::make_shared<_Obj>(obj_args...)),
         _states(std::make_tuple(_S0(_object), _Sn(_object)...)),
         _current_state(&std::get<0>(_states)), _started(false),
-        _terminated(false), _future_object_callback(),
-        _process_strategy(new DefaultProcessStrategy()) {
+        _terminated(false), _future_object_callback() {
     // std::visit([](auto &s) { std::cout << typeid(s).name() << "\n"; },
     //            _current_state);
   }
