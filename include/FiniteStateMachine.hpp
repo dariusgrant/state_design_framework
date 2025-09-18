@@ -60,6 +60,27 @@ Make StopLight::public fsm<LightState>
 */
 
 namespace fsm {
+struct AbstractProcessStrategy {
+  template <typename... _Args> using callback_t = std::function<void(_Args...)>;
+
+  template <typename... _Args>
+  constexpr static void
+  process(callback_t<_Args...> enter, callback_t<_Args...> exit,
+          callback_t<_Args...> transition, _Args... args) {};
+};
+
+struct DefaultProcessStrategy : public AbstractProcessStrategy {
+  template <typename... _Args>
+  constexpr static void
+  process(callback_t<_Args...> enter, callback_t<_Args...> exit,
+          callback_t<_Args...> transition, _Args... args) {
+    std::cout << "Default Process Strat\n";
+    exit(args...);
+    transition(args...);
+    enter(args...);
+  };
+};
+
 template <class _Obj, class _S0, class... _Sn> class FiniteStateMachine {
   static_assert(std::is_constructible_v<_S0, _S0> &&
                 (std::is_constructible_v<_Sn, _Sn> && ...));
@@ -91,6 +112,7 @@ private:
   std::function<void(std::shared_future<_Obj>)>
       _future_object_callback; // The callback for handling the future copies of
                                // the object upon state completion
+  AbstractProcessStrategy *_process_strategy;
 
 public:
   template <typename... ObjArgTypes>
@@ -98,7 +120,8 @@ public:
       : _object(std::make_shared<_Obj>(obj_args...)),
         _states(std::make_tuple(_S0(_object), _Sn(_object)...)),
         _current_state(&std::get<0>(_states)), _started(false),
-        _terminated(false), _future_object_callback() {
+        _terminated(false), _future_object_callback(),
+        _process_strategy(new DefaultProcessStrategy()) {
     // std::visit([](auto &s) { std::cout << typeid(s).name() << "\n"; },
     //            _current_state);
   }
@@ -127,11 +150,9 @@ public:
     }
 
     _started = true;
-    _enter_state(std::forward<T>(inputs)...);
+    _enter_state(inputs...);
     return *this;
   }
-
-  // FiniteStateMachine &start() { return start(); }
 
   template <class State, typename T, typename... Ts>
   FiniteStateMachine &configure(T arg, Ts... args) {
@@ -140,8 +161,11 @@ public:
     return *this;
   }
 
-  template <typename... T> FiniteStateMachine &process(T... inputs) {
+  template <typename _Strat = DefaultProcessStrategy, typename... T>
+  FiniteStateMachine &process(T... inputs) {
     // debug_log(*this, __func__, key_value_string("input", input));
+    static_assert(std::is_base_of_v<AbstractProcessStrategy, _Strat>,
+                  "`_Strat` must derive from `AbstractProcessStrategy`");
     if (!_started) {
       throw std::logic_error("FSM hasn't been started");
     }
@@ -149,15 +173,21 @@ public:
     if (_terminated) {
       throw std::runtime_error("FSM already terminated.");
     }
-    _exit_state(inputs...);
-    _transition_state(inputs...);
-    _enter_state(inputs...);
+
+    _Strat::process(std::function<void(T...)>(
+                        [&](T... args) { this->_enter_state(args...); }),
+                    std::function<void(T...)>(
+                        [&](T... args) { this->_exit_state(args...); }),
+                    std::function<void(T...)>(
+                        [&](T... args) { this->_transition_state(args...); }),
+                    inputs...);
     return *this;
   }
 
 private:
   template <typename... T> void _enter_state(T... inputs) {
-    // debug_log(*this, __func__, key_value_string("input", input));
+    std::cout << "Printing enter state\n";
+    // debug_log(*this, __func__, key_value_string("input", inputs)...);
     std::shared_future<_Obj> sf;
     std::visit(
         [this, &inputs..., &sf](auto &s) {

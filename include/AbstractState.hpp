@@ -14,6 +14,8 @@ template <class _T> struct StateIdentity {
   using type = _T;
 };
 
+
+
 template <class ObjType, typename IsTerminal> class AbstractState {
 public:
   using obj_t = ObjType;
@@ -40,15 +42,21 @@ public:
   }
 
   template <typename... T> void enter(T... inputs) {
-    // if (!_obj.expired()) {
-    //   _enter_impl(*_obj.lock(), std::forward<T>(inputs)...);
-    // }
+    if constexpr (!ABSTRACT_STATE_FALLTHROUGH) {
+      static_assert(std::false_type::value,
+                    "`enter` not defined for parameter list.");
+    }
   }
 
   template <typename... T> void exit(T... inputs) {
-    // if (!_obj.expired()) {
-    //   _exit_impl(std::as_const(*_obj.lock()), std::forward<T>(inputs)...);
-    // }
+    if constexpr (is_terminal) {
+      return;
+    }
+
+    if constexpr (!ABSTRACT_STATE_FALLTHROUGH) {
+      static_assert(std::false_type::value,
+                    "`exit` not defined for parameter list.");
+    }
   }
 
   template <class _T, typename... _Args>
@@ -67,21 +75,9 @@ public:
 
   // protected:
   //   template <typename... T> void _enter_impl(T... inputs) {
-  //     if constexpr (!ABSTRACT_STATE_FALLTHROUGH) {
-  //       static_assert(std::false_type::value,
-  //                     "`_enter_impl` not defined for parameter list.");
-  //     }
   //   }
 
   //   template <typename... T> void _exit_impl(T... inputs) {
-  //     if constexpr (is_terminal) {
-  //       return;
-  //     }
-
-  //     if constexpr (!ABSTRACT_STATE_FALLTHROUGH) {
-  //       static_assert(std::false_type::value,
-  //                     "`_exit_impl` not defined for parameter list.");
-  //     }
   //   }
 
   //   template <typename... T> std::type_index _transition_impl(T... inputs) {

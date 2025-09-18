@@ -3,9 +3,6 @@
 #include "../include/FiniteStateMachine.hpp"
 
 int main(int argc, const char **argv) {
-  // auto a = std::make_shared<std::array<std::vector<uint64_t>, 3>>();
-  // Distribute<3> d(a);
-  // d.enter(std::vector<uint64_t>{5}, {0, 0, 0});
   auto poller = SimPacketPoller();
   auto balancer = SimLoadBalancer<3>();
   poller.start();
