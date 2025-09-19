@@ -1,89 +1,19 @@
 #pragma once
 
 #include "AbstractState.hpp"
-#include "utility/Log.hpp"
+#include "ProcessStrategy.hpp"
+#include "SharedOutput.hpp"
 #include "utility/StateType.hpp"
-#include "utility/String.hpp"
+#include <algorithm>
+#include <execution>
 #include <functional>
 #include <future>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
-#include <utility>
 #include <variant>
-/*
-PROTOTYPE 2
-
-Limitations:
-    - States must be default-constructible
-        - No easy way to pass arguments in constructor
-        - Alternative was have separate method for adding states with variadic
-parameters
-            - Constructing within the method was not possible for the initial
-state
-                - `std::variant` requires the first template parameter to be
-default constructible
-        - Decided to add a `configure` method for states to achieve this after
-*/
-
-/*
-Class `AbstractState` provides an interface for state implementation.
-- `enter()` allows the state to modify the object's state. It is intentionally
-  the only function that allows modification on the passed object.
-- `exit()` purpose exists primarily for state cleanup but isn't bounded.
-- `transition()` implements the theoretical transition function.
-- `configure()` enables the ability to configure the state. This overcomes the
-  limitation of the class `FiniteStateMachine` (FSM) requiring states to be
-  default constructible.
-
-Below is the function call order on a state when operating under a FSM:
-    - Initial State: `enter()` -> `exit()` -> `transition()`
-    - Non-initial State: `exit()` -> `transition()` -> `enter()`
-
-With the exception of `configure()`, an object and input is always passed
-through each function. However, `enter()` is the only function that can
-manipulate the state of the passed object. This is to simplify modification on
-the object and limit the scope of what the state should do compared to the next
-state after transition.
-
-`exit()` occurs right before a transition occurs. The original intent behind its
-addition was to have the state cleanup itself before transitioning out from it.
-However, the limitation is only philosophical and cannot be enforced. There are
-also valid use-cases where state may want to be preserved through, such as
-simply keeping a counter.
-
-`transition()` must return the type index of a state that's apart of the FSM.
-
-Make StopLight::public fsm<LightState>
-    - What makes a light state a light state
-        - Can ask what the state's color
-*/
 
 namespace fsm {
-struct AbstractProcessStrategy {
-  template <typename... _Args> using callback_t = std::function<void(_Args...)>;
-
-  template <typename... _Args>
-  constexpr static void
-  process(callback_t<_Args...> enter, callback_t<_Args...> exit,
-          callback_t<_Args...> transition, _Args... args) {
-    static_assert(
-        std::false_type::value,
-        "`AbstractProcessStrategy` cannot be used as a process strategy.");
-  };
-};
-
-struct DefaultProcessStrategy : public AbstractProcessStrategy {
-  template <typename... _Args>
-  constexpr static void
-  process(callback_t<_Args...> enter, callback_t<_Args...> exit,
-          callback_t<_Args...> transition, _Args... args) {
-    exit(args...);
-    transition(args...);
-    enter(args...);
-  };
-};
-
 template <class _Obj, class _S0, class... _Sn> class FiniteStateMachine {
   static_assert(std::is_constructible_v<_S0, _S0> &&
                 (std::is_constructible_v<_Sn, _Sn> && ...));
@@ -107,129 +37,92 @@ private:
   // StateMap<_S0, _Sn...>
   StateTuple<_S0, _Sn...> _states; // The set of states the object can be in
   StateVariantType<_S0 *, _Sn *...>
-      _current_state;                    // Variants of state pointers
-  bool _started;                         // Has the FSM started?
-  bool _terminated;                      // Has the FSM been terminated?
-  std::shared_future<_Obj> _after_enter; // A future copy of the object after
-                                         // a state completion event
-  std::function<void(std::shared_future<_Obj>)>
-      _future_object_callback; // The callback for handling the future copies of
-                               // the object upon state completion
+      _current_state; // Variants of state pointers
+  FutureSubscription<_Obj> _shared_output;
+  bool _started;    // Has the FSM started?
+  bool _terminated; // Has the FSM been terminated?
 
 public:
-  template <typename... ObjArgTypes>
-  FiniteStateMachine(ObjArgTypes... obj_args)
-      : _object(std::make_shared<_Obj>(obj_args...)),
+  template <typename... _ObjArgs>
+  FiniteStateMachine(_ObjArgs... args)
+      : _object(std::make_shared<_Obj>(args...)),
         _states(std::make_tuple(_S0(_object), _Sn(_object)...)),
         _current_state(&std::get<0>(_states)), _started(false),
-        _terminated(false), _future_object_callback() {
-    // std::visit([](auto &s) { std::cout << typeid(s).name() << "\n"; },
-    //            _current_state);
-  }
+        _terminated(false) {}
 
   // Accessors
   const _Obj &get() const { return *_object; }
 
   // Queries
   constexpr bool is_terminable() const { return has_terminal_state; }
-  const bool is_terminated() const { return _terminated; }
+  bool is_terminated() const { return _terminated; }
 
-  // Modifiers
-  FiniteStateMachine &
-  set_future_object_cb(std::function<void(std::shared_future<_Obj>)> cb) {
-    // debug_log(*this, __func__,
-    //           key_value_string("_future_object_callback",
-    //           typeid(cb).name()));
-    _future_object_callback = cb;
+  template <class _Fsm> FiniteStateMachine &hook(std::string name, _Fsm &fsm) {
+    _shared_output.add(name, fsm);
     return *this;
   }
 
-  template <typename... T> FiniteStateMachine &start(T... inputs) {
-    // debug_log(*this, __func__, key_value_string("input", input));
-    if (_started) {
-      throw std::logic_error("FSM has already been started");
-    }
-
-    _started = true;
-    _enter_state(inputs...);
-    return *this;
-  }
-
-  template <class State, typename T, typename... Ts>
-  FiniteStateMachine &configure(T arg, Ts... args) {
-    std::visit([this, &arg, &args...](auto &s) { s.configure(arg, args...); },
-               _states[GetStateTypeIndex<State>()]);
-    return *this;
-  }
-
-  template <typename _Strat = DefaultProcessStrategy, typename... T>
-  FiniteStateMachine &process(T... inputs) {
-    // debug_log(*this, __func__, key_value_string("input", input));
+  template <typename _Strat = DefaultProcessStrategy, typename... _Args>
+  FiniteStateMachine &process(_Args... args) {
     static_assert(std::is_base_of_v<AbstractProcessStrategy, _Strat>,
                   "`_Strat` must derive from `AbstractProcessStrategy`");
-    if (!_started) {
-      throw std::logic_error("FSM hasn't been started");
-    }
-
     if (_terminated) {
       throw std::runtime_error("FSM already terminated.");
     }
 
-    _Strat::process(std::function<void(T...)>(
-                        [&](T... args) { this->_enter_state(args...); }),
-                    std::function<void(T...)>(
-                        [&](T... args) { this->_exit_state(args...); }),
-                    std::function<void(T...)>(
-                        [&](T... args) { this->_transition_state(args...); }),
-                    inputs...);
+    if (_started) {
+      _Strat::process(std::function<void(_Args...)>(
+                          [&](_Args... args) { this->_enter_state(args...); }),
+                      std::function<void(_Args...)>(
+                          [&](_Args... args) { this->_exit_state(args...); }),
+                      std::function<void(_Args...)>([&](_Args... args) {
+                        this->_transition_state(args...);
+                      }),
+                      args...);
+    } else {
+      _started = true;
+      _enter_state(args...);
+    }
     return *this;
   }
 
 private:
-  template <typename... T> void _enter_state(T... inputs) {
-    std::cout << "Printing enter state\n";
-    // debug_log(*this, __func__, key_value_string("input", inputs)...);
-    std::shared_future<_Obj> sf;
+  template <typename... _Args> void _enter_state(_Args... args) {
+    std::shared_future<_Obj> future_obj;
     std::visit(
-        [this, &inputs..., &sf](auto &s) {
-          sf = std::async(std::launch::deferred, [&]() -> _Obj {
-            s->enter(inputs...);
+        [&](auto &s) {
+          future_obj = std::async(std::launch::deferred, [&]() -> _Obj {
+            s->enter(args...);
             if (s->is_terminal) {
               _terminated = true;
             }
             return *_object;
           });
-
-          // If there is a callback defined,
-          // then pass the shared future object
-          // to it. This is to let the user
-          // decide how to handle the distribution
-          // to other objects, potentially in other
-          // threads.
-          if (_future_object_callback) {
-            _future_object_callback(sf);
-          }
         },
         _current_state);
 
-    *_object = sf.get();
+    _notify_subscribers(future_obj);
+    *_object = future_obj.get();
   }
 
-  template <typename... T> void _exit_state(T... inputs) {
-    // debug_log(*this, __func__, key_value_string("input", input));
-    std::visit([this, &inputs...](auto &s) { s->exit(inputs...); },
-               _current_state);
+  template <typename... _Args> void _exit_state(_Args... args) {
+    std::visit([&](auto &s) { s->exit(args...); }, _current_state);
   }
 
-  template <typename... T> void _transition_state(T... inputs) {
-    // debug_log(*this, __func__, key_value_string("input", input));
+  template <typename... _Args> void _transition_state(_Args... args) {
     _current_state = std::visit(
-        [this, &inputs...](auto &s) {
-          auto next_state_identity = s->transition(inputs...);
+        [&](auto &s) {
+          auto next_state_identity = s->transition(args...);
           return &std::get<typename decltype(next_state_identity)::type>(
               _states);
         },
         _current_state);
   }
+
+  void _notify_subscribers(std::shared_future<_Obj> future_obj) {
+    std::for_each(std::execution::par_unseq, _shared_output.begin(),
+                  _shared_output.end(),
+                  [&](auto &sub_cb) { sub_cb.second(future_obj); });
+  }
 };
-}; // namespace fsm
+} // namespace fsm
