@@ -1,23 +1,18 @@
 #include "../examples/include/LoadBalancer.hpp"
 #include "../examples/include/PacketPoller.hpp"
 #include "../include/FiniteStateMachine.hpp"
+#include <chrono>
+#include <future>
 #include <iostream>
 
-int main(int argc, const char **argv) {
+int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
   auto poller = SimPacketPoller();
   auto balancer = SimLoadBalancer<3>();
-  poller.hook("LoadBalancer", balancer);
+  poller.hook("Balancer", balancer);
 
-  // poller.set_future_object_cb([&balancer](std::shared_future<uint64_t> t) {
-  //   auto pkt = t.get();
-  //   std::cout << "Balancing: " << pkt << "\n";
-  //   balancer.process(std::vector<uint64_t>{pkt}, balancer.load_counts());
-  // });
-
-  for (auto i = 0; i < 10; ++i) {
-    std::cout << poller.get() << "\n";
+  for (auto i = 0; i < 100'000; ++i) {
+    // std::cout << "Poller: " << i << "\n";
     poller.process();
-    // balancer.process(std::vector{poller.get()});
-    balancer.print_load_counts();
+    // balancer.print_load_counts();
   }
 }

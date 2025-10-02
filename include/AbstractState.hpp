@@ -2,7 +2,15 @@
 #include "utility/Environment.hpp"
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <type_traits>
+
+namespace fsm {
+template <class _T> struct StateIdentity {
+  using type = _T;
+};
+
+using NullStateIdentity = StateIdentity<std::nullptr_t>;
 
 #define VARIADIC_TEMPLATED_FUNCTION_NO_OP(return_type, name)                   \
   template <typename... _Args>                                                 \
@@ -13,12 +21,16 @@
 
 #define STATE_EXIT_FUNCTION_NO_OP VARIADIC_TEMPLATED_FUNCTION_NO_OP(void, exit)
 
-namespace fsm {
-template <class _T> struct StateIdentity {
-  using type = _T;
-};
+#define STATE_TRANSITION_FUNCTION_NO_OP(state_class)                           \
+  template <class _T, typename... _Args>                                       \
+  StateIdentity<_T> transition([[maybe_unused]] _Args... args) {               \
+    return StateIdentity<state_class>();                                       \
+  }
 
 template <class _Obj, typename _IsTerminal> class AbstractState {
+  static_assert(std::is_convertible_v<_IsTerminal, bool>,
+                "`_IsTerminal` must be convertible to a boolean type.");
+
 public:
   using obj_t = _Obj;
   using weak_ptr_t = std::weak_ptr<_Obj>;
@@ -54,12 +66,12 @@ public:
 
   template <class _T, typename... _Args>
   [[nodiscard]] StateIdentity<_T> transition([[maybe_unused]] _Args... args) {
-    return StateIdentity<std::nullptr_t>();
+    return NullStateIdentity();
   }
 };
 
+// Aliases
 template <class _Obj>
 using NonTerminalState = AbstractState<_Obj, std::false_type>;
-
 template <class _Obj> using TerminalState = AbstractState<_Obj, std::true_type>;
 }; // namespace fsm

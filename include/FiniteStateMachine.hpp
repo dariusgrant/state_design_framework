@@ -3,8 +3,12 @@
 #include "AbstractState.hpp"
 #include "ProcessStrategy.hpp"
 #include "SharedOutput.hpp"
+#include "utility/Environment.hpp"
 #include "utility/StateType.hpp"
 #include <algorithm>
+#include <atomic>
+#include <csignal>
+#include <cstddef>
 #include <execution>
 #include <functional>
 #include <future>
@@ -14,48 +18,67 @@
 #include <variant>
 
 namespace fsm {
-template <class _Obj, class _S0, class... _Sn> class FiniteStateMachine {
-  static_assert(std::is_constructible_v<_S0, _S0> &&
-                (std::is_constructible_v<_Sn, _Sn> && ...));
+class BaseFiniteStateMachine {
+protected:
+  std::atomic_bool _started;
+  std::atomic_bool _terminated;
 
-  static_assert(std::is_assignable_v<_S0 &, _S0> &&
-                (std::is_assignable_v<_Sn &, _Sn> && ...));
+public:
+  BaseFiniteStateMachine() : _started(false), _terminated(false) {}
 
+  bool has_started() const { return _started.load(); }
+  bool is_terminated() const { return _terminated.load(); }
+
+  BaseFiniteStateMachine &start() {
+    if (!has_started()) {
+      _started.store(true);
+    }
+    return *this;
+  }
+
+  BaseFiniteStateMachine &terminate() {
+    if (_started.load()) {
+      _terminated.store(true);
+    }
+    return *this;
+  }
+};
+
+template <class _Obj, class _S0, class... _Sn>
+class FiniteStateMachine : public BaseFiniteStateMachine {
   // Reject parameter type that isn't a state.
-  static_assert(((std::is_base_of_v<NonTerminalState<_Obj>, _Sn> ||
-                  std::is_base_of_v<TerminalState<_Obj>, _Sn>) &&
-                 ...),
+  static_assert((std::is_base_of_v<NonTerminalState<_Obj>, _S0> ||
+                 std::is_base_of_v<TerminalState<_Obj>, _S0>) ||
+                    ((std::is_base_of_v<NonTerminalState<_Obj>, _Sn> ||
+                      std::is_base_of_v<TerminalState<_Obj>, _Sn>) ||
+                     ...),
                 "The state does not derived from class `AbstractState`");
 
 public:
+  using shared_ptr_t = std::shared_ptr<_Obj>;
+  using shared_future_t = std::shared_future<_Obj>;
+  using state_tuple_t = StateTuple<_S0, _Sn...>;
+  using state_variant_t = StateVariant<_S0 *, _Sn *...>;
+  using future_subscription_t = FutureSubscription<_Obj>;
+
   static constexpr bool has_terminal_state =
       (std::is_base_of_v<fsm::TerminalState<_Obj>, _S0> ||
        (std::is_base_of_v<fsm::TerminalState<_Obj>, _Sn> || ...));
 
-private:
-  std::shared_ptr<_Obj> _object; // The object that's managed by the FSM
-  // StateMap<_S0, _Sn...>
-  StateTuple<_S0, _Sn...> _states; // The set of states the object can be in
-  StateVariantType<_S0 *, _Sn *...>
-      _current_state; // Variants of state pointers
-  FutureSubscription<_Obj> _shared_output;
-  bool _started;    // Has the FSM started?
-  bool _terminated; // Has the FSM been terminated?
+protected:
+  shared_ptr_t _object;
+  state_tuple_t _states;
+  state_variant_t _current_state;
+  future_subscription_t _shared_output;
 
 public:
   template <typename... _ObjArgs>
   FiniteStateMachine(_ObjArgs... args)
       : _object(std::make_shared<_Obj>(args...)),
         _states(std::make_tuple(_S0(_object), _Sn(_object)...)),
-        _current_state(&std::get<0>(_states)), _started(false),
-        _terminated(false) {}
+        _current_state(&std::get<0>(_states)) {}
 
-  // Accessors
   const _Obj &get() const { return *_object; }
-
-  // Queries
-  constexpr bool is_terminable() const { return has_terminal_state; }
-  bool is_terminated() const { return _terminated; }
 
   template <class _Fsm> FiniteStateMachine &hook(std::string name, _Fsm &fsm) {
     _shared_output.add(name, fsm);
@@ -66,21 +89,23 @@ public:
   FiniteStateMachine &process(_Args... args) {
     static_assert(std::is_base_of_v<AbstractProcessStrategy, _Strat>,
                   "`_Strat` must derive from `AbstractProcessStrategy`");
-    if (_terminated) {
-      throw std::runtime_error("FSM already terminated.");
+    if (is_terminated()) {
+      if constexpr (THROW_ON_PROCESS_AFTER_TERMINATION) {
+        throw std::runtime_error("FSM already terminated.");
+      }
+      return *this;
     }
 
-    if (_started) {
+    if (has_started()) {
       _Strat::process(std::function<void(_Args...)>(
-                          [&](_Args... args) { this->_enter_state(args...); }),
+                          [&](_Args... args) { _enter_state(args...); }),
                       std::function<void(_Args...)>(
-                          [&](_Args... args) { this->_exit_state(args...); }),
-                      std::function<void(_Args...)>([&](_Args... args) {
-                        this->_transition_state(args...);
-                      }),
+                          [&](_Args... args) { _exit_state(args...); }),
+                      std::function<void(_Args...)>(
+                          [&](_Args... args) { _transition_state(args...); }),
                       args...);
     } else {
-      _started = true;
+      start();
       _enter_state(args...);
     }
     return *this;
@@ -88,7 +113,7 @@ public:
 
 private:
   template <typename... _Args> void _enter_state(_Args... args) {
-    std::shared_future<_Obj> future_obj;
+    shared_future_t future_obj;
     std::visit(
         [&](auto &s) {
           future_obj = std::async(std::launch::deferred, [&]() -> _Obj {
@@ -101,8 +126,8 @@ private:
         },
         _current_state);
 
-    _notify_subscribers(future_obj);
     *_object = future_obj.get();
+    _notify_subscribers(future_obj);
   }
 
   template <typename... _Args> void _exit_state(_Args... args) {
@@ -110,16 +135,21 @@ private:
   }
 
   template <typename... _Args> void _transition_state(_Args... args) {
-    _current_state = std::visit(
+    std::visit(
         [&](auto &s) {
           auto next_state_identity = s->transition(args...);
-          return &std::get<typename decltype(next_state_identity)::type>(
-              _states);
+          if (std::is_same_v<typename decltype(next_state_identity)::type,
+                             std::nullptr_t>) {
+            _terminated.store(true);
+            return;
+          }
+          _current_state =
+              &std::get<typename decltype(next_state_identity)::type>(_states);
         },
         _current_state);
   }
 
-  void _notify_subscribers(std::shared_future<_Obj> future_obj) {
+  void _notify_subscribers(std::shared_future<_Obj> &future_obj) {
     std::for_each(std::execution::par_unseq, _shared_output.begin(),
                   _shared_output.end(),
                   [&](auto &sub_cb) { sub_cb.second(future_obj); });
