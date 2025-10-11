@@ -11,8 +11,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char **argv) {
   poller.hook("Balancer", balancer);
 
   for (auto i = 0; i < 100'000; ++i) {
-    // std::cout << "Poller: " << i << "\n";
     poller.process();
-    // balancer.print_load_counts();
+    // balancer.process(poller.get());
   }
 }

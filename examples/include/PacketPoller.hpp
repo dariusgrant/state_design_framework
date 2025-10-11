@@ -1,5 +1,6 @@
 #include "../../include/FiniteStateMachine.hpp"
 #include <cstdint>
+#include <iostream>
 #include <random>
 
 class PollState : public fsm::NonTerminalState<uint64_t> {
@@ -23,7 +24,10 @@ public:
 public:
   STATE_EXIT_FUNCTION_NO_OP
 
-  void enter() { *_obj.lock() = dist(gen); }
+  void enter() {
+    std::cout << "[Poller] Polled Packet\n";
+    *_obj.lock() = dist(gen);
+  }
 
   auto transition() { return fsm::StateIdentity<PollState>(); };
 };
