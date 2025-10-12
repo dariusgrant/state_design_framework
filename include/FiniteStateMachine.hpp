@@ -3,13 +3,13 @@
 #include "AbstractState.hpp"
 #include "ProcessStrategy.hpp"
 #include "Subscription.hpp"
+#include "utility/Concurrency.hpp"
 #include "utility/Environment.hpp"
 #include "utility/StateType.hpp"
 #include <algorithm>
 #include <atomic>
-#include <csignal>
+
 #include <cstddef>
-#include <deque>
 #include <execution>
 #include <functional>
 #include <future>
@@ -19,24 +19,6 @@
 #include <variant>
 
 namespace fsm {
-// TODO move to utility folder.
-template <class _Obj, class _Queue = std::deque<_Obj>>
-class AtomicQueue : _Queue {
-private:
-  std::atomic<_Queue *> _atomic_queue_ptr;
-
-public:
-  AtomicQueue() : _Queue(), _atomic_queue_ptr(this) {}
-
-  void push(_Obj obj) { _atomic_queue_ptr.load()->push_back(obj); }
-  _Obj pop() {
-    auto _queue = _atomic_queue_ptr.load();
-    auto res = _queue.front();
-    _queue.pop_front();
-    return res;
-  }
-};
-
 class BaseFiniteStateMachine {
 protected:
   std::atomic_bool _started;
