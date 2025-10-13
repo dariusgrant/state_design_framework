@@ -1,17 +1,20 @@
 #include "../include/utility/Concurrency.hpp"
-#include <chrono>
+#include <algorithm>
+#include <cassert>
 #include <future>
-#include <iostream>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 void test_single_consumer_multiple_producer() {
   fsm::AtomicQueue<std::pair<std::thread::id, int>> queue;
 
+  std::unordered_map<std::thread::id, std::vector<int>> actual_counts;
+
   auto produce_func = [&](int x) {
+    auto tid = std::this_thread::get_id();
     for (auto i = 0; i < 100; ++i) {
-      queue.push({std::this_thread::get_id(), x});
-      //   std::this_thread::yield();
+      queue.push({tid, x});
     }
   };
   auto t1 = std::async(std::launch::async, produce_func, 0);
@@ -24,7 +27,13 @@ void test_single_consumer_multiple_producer() {
 
   while (!queue.empty()) {
     auto val = queue.pop();
-    std::cout << val.first << ": " << val.second << "\n";
+    actual_counts[val.first].push_back(val.second);
+  }
+
+  for (auto &kv : actual_counts) {
+    assert(kv.first != std::thread::id());
+    assert(std::all_of(kv.second.begin(), kv.second.end(),
+                       [&](auto i) { return i == *kv.second.begin(); }));
   }
 }
 
