@@ -12,11 +12,10 @@ private:
   std::atomic<std::thread::id> _owning_thread;
 
 public:
-  void wait_until_yield(
-      std::thread::id requesting_thread = std::this_thread::get_id()) {
+  void wait_until_yield() {
     while (!_owning_thread.compare_exchange_weak(
-        _default_thread_id, requesting_thread, std::memory_order_acq_rel,
-        std::memory_order_relaxed)) {
+        _default_thread_id, std::this_thread::get_id(),
+        std::memory_order_acq_rel, std::memory_order_relaxed)) {
     }
   }
 
@@ -28,11 +27,9 @@ private:
   ThreadOwnership &_thread_ownership;
 
 public:
-  ScopedThreadOwnership(
-      ThreadOwnership &thread_ownership,
-      std::thread::id requesting_thread = std::this_thread::get_id())
+  ScopedThreadOwnership(ThreadOwnership &thread_ownership)
       : _thread_ownership(thread_ownership) {
-    _thread_ownership.wait_until_yield(requesting_thread);
+    _thread_ownership.wait_until_yield();
   }
 
   ~ScopedThreadOwnership() { _thread_ownership.release_ownership(); }
