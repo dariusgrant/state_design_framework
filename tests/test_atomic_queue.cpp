@@ -6,7 +6,11 @@
 #include <unordered_map>
 #include <vector>
 
-void test_single_consumer_multiple_producer() {
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
+void test_multiple_producer() {
   fsm::AtomicQueue<std::pair<std::thread::id, int>> queue;
 
   std::unordered_map<std::thread::id, std::vector<int>> actual_counts;
@@ -37,4 +41,4 @@ void test_single_consumer_multiple_producer() {
   }
 }
 
-int main() { test_single_consumer_multiple_producer(); }
+int main() { test_multiple_producer(); }
