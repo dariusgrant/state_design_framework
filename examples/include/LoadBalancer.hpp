@@ -10,7 +10,7 @@ template <size_t N> class Distribute;
 
 template <size_t N>
 using LoadBalancerNonTerminalState =
-    fsm::NonTerminalState<std::array<std::vector<uint64_t>, N>>;
+    fsm::non_terminal_state_t<std::array<std::vector<uint64_t>, N>>;
 
 template <size_t N> class Idle : public LoadBalancerNonTerminalState<N> {
 public:

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <random>
 
-class PollState : public fsm::NonTerminalState<uint64_t> {
+class PollState : public fsm::non_terminal_state_t<uint64_t> {
 private:
   std::random_device rd; // No copyable - thus the rule of 3 is applied here
   std::mt19937 gen;
@@ -11,9 +11,11 @@ private:
 
 public:
   PollState(const PollState::shared_ptr_t &obj)
-      : fsm::NonTerminalState<obj_t>(obj), rd(), gen(rd()),
+      : fsm::non_terminal_state_t<obj_t>(obj), rd(), gen(rd()),
         dist(0, UINT64_MAX) {}
-  PollState(const PollState &a) : fsm::NonTerminalState<obj_t>(a) { *this = a; }
+  PollState(const PollState &a) : fsm::non_terminal_state_t<obj_t>(a) {
+    *this = a;
+  }
   PollState &operator=(const PollState &a) {
     this->_obj = a._obj;
     this->gen = a.gen;

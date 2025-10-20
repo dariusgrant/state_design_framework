@@ -5,14 +5,14 @@
 #include <string>
 #include <type_traits>
 
-using ParserNonTerminalState = fsm::NonTerminalState<uint64_t>;
-using ParserTerminalState = fsm::TerminalState<uint64_t>;
+using ParserNonTerminalState = fsm::non_terminal_state_t<uint64_t>;
+using ParserTerminalState = fsm::terminal_state_t<uint64_t>;
 
 class ByteParser : public ParserNonTerminalState {};
 
 template <size_t N>
 using LoadBalancerNonTerminalState =
-    fsm::NonTerminalState<std::array<std::vector<uint64_t>, N>>;
+    fsm::non_terminal_state_t<std::array<std::vector<uint64_t>, N>>;
 
 template <size_t N> class Idle : public LoadBalancerNonTerminalState<N> {
 public:

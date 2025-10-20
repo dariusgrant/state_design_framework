@@ -1,17 +1,14 @@
-#include "../include/utility/Concurrency.hpp"
+#include "../../include/concurrency/Queue.hpp"
 #include <algorithm>
 #include <cassert>
 #include <future>
+#include <iostream>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-
 void test_multiple_producer() {
-  fsm::AtomicQueue<std::pair<std::thread::id, int>> queue;
+  fsm::Queue<std::pair<std::thread::id, int>> queue;
 
   std::unordered_map<std::thread::id, std::vector<int>> actual_counts;
 
