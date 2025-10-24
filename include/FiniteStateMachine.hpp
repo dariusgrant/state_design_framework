@@ -81,7 +81,9 @@ public:
         _current_state_address_iterator(
             _state_address_hash_map.find(state_type_hash_v<_S0>)) {}
 
-  _Obj &get() const { return *_object; }
+  operator _Obj &() { return *_object; }
+  _Obj &operator*() const { return *_object; }
+  _Obj *operator->() const { return _object.get(); }
 
   template <typename _Strat = DefaultProcessStrategy, typename... _Args>
   FiniteStateMachine &process(_Args... args) {

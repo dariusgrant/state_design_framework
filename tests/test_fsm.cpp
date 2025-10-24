@@ -10,7 +10,7 @@ void test_incrementer_fsm() {
   // Default values
   assert(!fsm.has_started());
   assert(!fsm.is_terminated());
-  assert(fsm.get() == 0);
+  assert(fsm == 0);
 
   // Run until termination
   while (!fsm.is_terminated()) {
@@ -19,13 +19,13 @@ void test_incrementer_fsm() {
 
   assert(fsm.has_started());   // Implicit start via process function
   assert(fsm.is_terminated()); // Termination via FinalState entrance
-  assert(fsm.get() == 100);    // CheckState -> FinalState is reached at 100
+  assert(fsm == 100);          // CheckState -> FinalState is reached at 100
 
   // Resetting the FSM should have default values.
   fsm.reset();
   assert(!fsm.has_started());
   assert(!fsm.is_terminated());
-  assert(fsm.get() == 0);
+  assert(fsm == 0);
 
   // Terminating an unstarted FSM won't do anything.
   fsm.terminate();
