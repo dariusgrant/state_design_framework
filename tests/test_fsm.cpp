@@ -1,5 +1,6 @@
 #include "../include/FiniteStateMachine.hpp"
 #include "fsm/incrementer.hpp"
+#include "fsm/turnstile.hpp"
 #include <cassert>
 
 void test_incrementer_fsm() {
@@ -32,4 +33,23 @@ void test_incrementer_fsm() {
   assert(!fsm.is_terminated());
 }
 
-int main() { test_incrementer_fsm(); }
+void test_turnstile_fsm() {
+  auto fsm = TurnstileExample::turnstile_fsm_t();
+  static_assert(!fsm.has_terminal_state);
+  assert(!fsm.has_started());
+  assert(!fsm.is_terminated());
+  assert(fsm->is_locked() == true);
+  fsm.process(TurnstileExample::Input::coin);
+  assert(!fsm->is_locked());
+  fsm.process(TurnstileExample::Input::coin);
+  assert(!fsm->is_locked());
+  fsm.process(TurnstileExample::Input::push);
+  assert(fsm->is_locked());
+  fsm.process(TurnstileExample::Input::push);
+  assert(fsm->is_locked());
+}
+
+int main() {
+  test_incrementer_fsm();
+  test_turnstile_fsm();
+}
