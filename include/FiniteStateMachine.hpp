@@ -56,7 +56,7 @@ public:
       std::unordered_map<size_t, state_address_variant_t>;
 
   // Does this FSM contain a terminal state?
-  static constexpr bool has_terminal_state =
+  static constexpr bool has_final_state =
       (std::is_base_of_v<fsm::terminal_state_t<_Obj>, _S0> ||
        (std::is_base_of_v<fsm::terminal_state_t<_Obj>, _Sn> || ...));
 
@@ -119,51 +119,34 @@ public:
     return *this;
   }
 
+  bool in_final_state() const {
+    return std::visit([&](auto &s) { return s->is_final; },
+                      _current_state_address_iterator->second);
+  }
+
 private:
-  template <typename... _Args> void _enter_state(_Args... args) {
-    std::visit(
-        [&](auto &s) {
-          s->enter(args...);
-          if (s->is_terminal) {
-            _terminated = true;
-          }
-        },
-        _current_state_address_iterator->second);
-  }
-
-  template <typename... _Args> void _exit_state(_Args... args) {
-    std::visit([&](auto &s) { s->exit(args...); },
-               _current_state_address_iterator->second);
-  }
-
-  template <typename... _Args> void _transition_state(_Args... args) {
-    std::visit(
-        [&](auto &s) {
-          // Get the next state's hash
-          auto next_state_hash = s->process(args...);
-          _current_state_address_iterator =
-              _state_address_hash_map.find(next_state_hash);
-        },
-        _current_state_address_iterator->second);
-  }
-
   template <typename... _Args> void _process_state(_Args... args) {
     std::visit(
         [&](auto &s) {
           // Process current state and get the next state's hash
           auto next_state_hash = s->process(args...);
 
-          if (s->is_terminal) {
-            // Set terminated flag if just processed terminal state
-            _terminated = true;
-            return;
-          } else {
-            // Set current state to the next state
-            _current_state_address_iterator =
-                _state_address_hash_map.find(next_state_hash);
-          }
+          // Set current state to the next state
+          _current_state_address_iterator =
+              _state_address_hash_map.find(next_state_hash);
         },
         _current_state_address_iterator->second);
   }
+};
+
+template <class _S0, class... _Sn>
+using BooleanFiniteStateMachine = FiniteStateMachine<bool, _S0, _Sn...>;
+
+template <class _S0, class... _Sn>
+class Acceptor : public BooleanFiniteStateMachine<_S0, _Sn...> {
+public:
+  Acceptor() : BooleanFiniteStateMachine<_S0, _Sn...>(false) {}
+
+  bool is_accepted() { return this->in_final_state(); }
 };
 } // namespace fsm

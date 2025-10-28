@@ -5,9 +5,9 @@
 #include <type_traits>
 
 namespace fsm {
-template <class _Obj, typename _IsTerminal> class State {
-  static_assert(std::is_convertible_v<_IsTerminal, bool>,
-                "`_IsTerminal` must be convertible to a boolean type.");
+template <class _Obj, typename _IsFinal> class State {
+  static_assert(std::is_convertible_v<_IsFinal, bool>,
+                "`_IsFinal` must be convertible to a boolean type.");
 
 public:
   using obj_t = _Obj;
@@ -18,7 +18,7 @@ protected:
   weak_ptr_t _obj;
 
 public:
-  static constexpr bool is_terminal = _IsTerminal::value;
+  static constexpr bool is_final = _IsFinal::value;
 
   State(const shared_ptr_t &obj) : _obj(obj) {}
 

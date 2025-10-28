@@ -6,21 +6,25 @@
 void test_incrementer_fsm() {
   auto fsm = incrementer_fsm_t();
   // FinalState is the terminal state
-  static_assert(fsm.has_terminal_state);
+  static_assert(fsm.has_final_state);
 
   // Default values
   assert(!fsm.has_started());
   assert(!fsm.is_terminated());
+  assert(!fsm.in_final_state());
   assert(fsm == 0);
 
   // Run until termination
-  while (!fsm.is_terminated()) {
+  while (!fsm.in_final_state()) {
     fsm.process();
   }
 
-  assert(fsm.has_started());   // Implicit start via process function
-  assert(fsm.is_terminated()); // Termination via FinalState entrance
-  assert(fsm == 100);          // CheckState -> FinalState is reached at 100
+  assert(fsm.has_started());    // Implicit start via process function
+  assert(fsm.in_final_state()); // FinalState
+  assert(fsm == 100);           // CheckState -> FinalState is reached at 100
+
+  fsm.terminate();
+  assert(fsm.is_terminated());
 
   // Resetting the FSM should have default values.
   fsm.reset();
@@ -35,7 +39,7 @@ void test_incrementer_fsm() {
 
 void test_turnstile_fsm() {
   auto fsm = TurnstileExample::turnstile_fsm_t();
-  static_assert(!fsm.has_terminal_state);
+  static_assert(!fsm.has_final_state);
   assert(!fsm.has_started());
   assert(!fsm.is_terminated());
   assert(fsm->is_locked() == true);
