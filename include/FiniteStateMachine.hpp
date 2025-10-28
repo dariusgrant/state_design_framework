@@ -65,7 +65,7 @@ protected:
   state_tuple_t _states; // The states of the objected
   state_address_hash_map_t
       _state_address_hash_map; // State type hash to state address
-  state_address_hash_map_t::iterator
+  typename state_address_hash_map_t::iterator
       _current_state_address_iterator; // The current state's iterator
 
 public:
@@ -97,16 +97,19 @@ public:
     }
 
     if (_started) {
-      _Strat::process(std::function<void(_Args...)>(
-                          [&](_Args... args) { _enter_state(args...); }),
-                      std::function<void(_Args...)>(
-                          [&](_Args... args) { _exit_state(args...); }),
-                      std::function<void(_Args...)>(
-                          [&](_Args... args) { _transition_state(args...); }),
-                      args...);
+      // _Strat::process(std::function<void(_Args...)>(
+      //                     [&](_Args... args) { _enter_state(args...); }),
+      //                 std::function<void(_Args...)>(
+      //                     [&](_Args... args) { _exit_state(args...); }),
+      //                 std::function<void(_Args...)>(
+      //                     [&](_Args... args) { _transition_state(args...);
+      //                     }),
+      //                 args...);
+      _process_state(args...);
     } else {
       start();
-      _enter_state(args...);
+      // _enter_state(args...);
+      _process_state(args...);
     }
     return *this;
   }
@@ -137,9 +140,28 @@ private:
     std::visit(
         [&](auto &s) {
           // Get the next state's hash
-          auto next_state_hash = s->transition(args...);
+          auto next_state_hash = s->process(args...);
           _current_state_address_iterator =
               _state_address_hash_map.find(next_state_hash);
+        },
+        _current_state_address_iterator->second);
+  }
+
+  template <typename... _Args> void _process_state(_Args... args) {
+    std::visit(
+        [&](auto &s) {
+          // Process current state and get the next state's hash
+          auto next_state_hash = s->process(args...);
+
+          if (s->is_terminal) {
+            // Set terminated flag if just processed terminal state
+            _terminated = true;
+            return;
+          } else {
+            // Set current state to the next state
+            _current_state_address_iterator =
+                _state_address_hash_map.find(next_state_hash);
+          }
         },
         _current_state_address_iterator->second);
   }

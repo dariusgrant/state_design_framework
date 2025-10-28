@@ -29,18 +29,23 @@ public:
     return *_obj.lock();
   }
 
-  void enter() {}
-  template <typename... _Args> void enter(_Args...) {}
+  /*
+  Default implementation of a state's `process` function, returning the
+  hash value of itself.
 
-  void exit() {}
-  template <typename... _Args> void exit(_Args...) {}
+  Derived states should create specializations of this function
+  to handle specific classes of input.
 
-  [[nodiscard]] size_t transition() {
-    return state_type_hash_v<decltype(*this)>;
-  }
+  The return value shall be the hash value of a pointer-to-state type.
+  Below is a valid example of such type:
 
-  template <class _T, typename... _Args>
-  [[nodiscard]] size_t transition(_Args...) {
+    `typeid(MyStateType *).hash_code();`
+
+  Note:
+  The templated variable `state_type_hash_v` is available for convenience.
+  */
+  template <typename... _Args>
+  [[nodiscard]] size_t process([[maybe_unused]] _Args...) {
     return state_type_hash_v<decltype(*this)>;
   }
 };

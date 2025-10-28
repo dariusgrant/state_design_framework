@@ -1,29 +1,36 @@
 #include "../../include/FiniteStateMachine.hpp"
 #include <cassert>
 
-class LockedState;
-class UnlockedState;
+class IncrementState;
+class CheckState;
 class FinalState;
 
-class LockedState : public fsm::non_terminal_state_t<int> {
+class IncrementState : public fsm::non_terminal_state_t<int> {
 public:
-  void enter() { get_object() += 1; }
+  IncrementState(const shared_ptr_t &s) : fsm::non_terminal_state_t<int>(s) {}
 
-  size_t transition() { return fsm::state_type_hash_v<UnlockedState>; }
+  size_t process() {
+    get_object() += 1;
+    return fsm::state_type_hash_v<CheckState>;
+  }
 };
 
-class UnlockedState : public fsm::non_terminal_state_t<int> {
+class CheckState : public fsm::non_terminal_state_t<int> {
 public:
-  size_t transition() {
+  CheckState(const shared_ptr_t &s) : fsm::non_terminal_state_t<int>(s) {}
+  size_t process() {
     if (get_object() < 100) {
-      return fsm::state_type_hash_v<LockedState>;
+      return fsm::state_type_hash_v<IncrementState>;
     } else {
       return fsm::state_type_hash_v<FinalState>;
     }
   }
 };
 
-class FinalState : public fsm::terminal_state_t<int> {};
+class FinalState : public fsm::terminal_state_t<int> {
+public:
+  FinalState(const shared_ptr_t &s) : fsm::terminal_state_t<int>(s) {}
+};
 
 using incrementer_fsm_t =
-    fsm::FiniteStateMachine<int, LockedState, UnlockedState, FinalState>;
+    fsm::FiniteStateMachine<int, IncrementState, CheckState, FinalState>;
