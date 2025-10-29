@@ -1,11 +1,10 @@
 #include "../../include/FiniteStateMachine.hpp"
 #include <cassert>
 
-class IncrementState;
-class CheckState;
-class FinalState;
+class EvenState;
+class OddState;
 
-class IncrementState : public fsm::state_t<int> {
+class EvenState : public fsm::final_state_t<class Obj><int> {
 public:
   IncrementState(const shared_ptr_t &s) : fsm::state_t<int>(s) {}
 

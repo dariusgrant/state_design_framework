@@ -16,7 +16,7 @@ public:
   bool is_locked() const { return _is_locked; }
 };
 
-using non_terminal_turnstile_state_t = fsm::non_terminal_state_t<Turnstile>;
+using non_terminal_turnstile_state_t = fsm::state_t<Turnstile>;
 
 class LockedState;
 class UnlockedState;

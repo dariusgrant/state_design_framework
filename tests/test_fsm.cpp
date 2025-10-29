@@ -40,6 +40,7 @@ void test_incrementer_fsm() {
 void test_turnstile_fsm() {
   auto fsm = TurnstileExample::turnstile_fsm_t();
   static_assert(!fsm.has_final_state);
+  assert(!fsm.in_final_state());
   assert(!fsm.has_started());
   assert(!fsm.is_terminated());
   assert(fsm->is_locked() == true);
@@ -51,6 +52,7 @@ void test_turnstile_fsm() {
   assert(fsm->is_locked());
   fsm.process(TurnstileExample::Input::push);
   assert(fsm->is_locked());
+  assert(!fsm.in_final_state());
 }
 
 int main() {

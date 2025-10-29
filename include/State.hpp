@@ -51,6 +51,6 @@ public:
 };
 
 // Aliases
-template <class _Obj> using non_terminal_state_t = State<_Obj, std::false_type>;
-template <class _Obj> using terminal_state_t = State<_Obj, std::true_type>;
+template <class _Obj> using state_t = State<_Obj, std::false_type>;
+template <class _Obj> using final_state_t = State<_Obj, std::true_type>;
 }; // namespace fsm

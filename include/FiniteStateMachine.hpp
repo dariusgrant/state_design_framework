@@ -40,10 +40,10 @@ public:
 template <class _Obj, class _S0, class... _Sn>
 class FiniteStateMachine : public BaseFiniteStateMachine {
   // Reject template type that isn't a state.
-  static_assert((std::is_base_of_v<non_terminal_state_t<_Obj>, _S0> ||
-                 std::is_base_of_v<terminal_state_t<_Obj>, _S0>) ||
-                    ((std::is_base_of_v<non_terminal_state_t<_Obj>, _Sn> ||
-                      std::is_base_of_v<terminal_state_t<_Obj>, _Sn>) ||
+  static_assert((std::is_base_of_v<state_t<_Obj>, _S0> ||
+                 std::is_base_of_v<final_state_t<_Obj>, _S0>) ||
+                    ((std::is_base_of_v<state_t<_Obj>, _Sn> ||
+                      std::is_base_of_v<final_state_t<_Obj>, _Sn>) ||
                      ...),
                 "The state does not derived from class `State`");
 
@@ -57,8 +57,8 @@ public:
 
   // Does this FSM contain a terminal state?
   static constexpr bool has_final_state =
-      (std::is_base_of_v<fsm::terminal_state_t<_Obj>, _S0> ||
-       (std::is_base_of_v<fsm::terminal_state_t<_Obj>, _Sn> || ...));
+      (std::is_base_of_v<fsm::final_state_t<_Obj>, _S0> ||
+       (std::is_base_of_v<fsm::final_state_t<_Obj>, _Sn> || ...));
 
 protected:
   shared_ptr_t _object;  // The object being managed by the FSM
@@ -97,18 +97,9 @@ public:
     }
 
     if (_started) {
-      // _Strat::process(std::function<void(_Args...)>(
-      //                     [&](_Args... args) { _enter_state(args...); }),
-      //                 std::function<void(_Args...)>(
-      //                     [&](_Args... args) { _exit_state(args...); }),
-      //                 std::function<void(_Args...)>(
-      //                     [&](_Args... args) { _transition_state(args...);
-      //                     }),
-      //                 args...);
       _process_state(args...);
     } else {
       start();
-      // _enter_state(args...);
       _process_state(args...);
     }
     return *this;
@@ -140,13 +131,36 @@ private:
 };
 
 template <class _S0, class... _Sn>
+using NullFiniteStateMachine = FiniteStateMachine<std::nullptr_t, _S0, _Sn...>;
+
+template <class _S0, class... _Sn>
 using BooleanFiniteStateMachine = FiniteStateMachine<bool, _S0, _Sn...>;
 
 template <class _S0, class... _Sn>
-class Acceptor : public BooleanFiniteStateMachine<_S0, _Sn...> {
+class Acceptor : public NullFiniteStateMachine<_S0, _Sn...> {
 public:
-  Acceptor() : BooleanFiniteStateMachine<_S0, _Sn...>(false) {}
+  Acceptor() : NullFiniteStateMachine<_S0, _Sn...>(false) {}
 
-  bool is_accepted() { return this->in_final_state(); }
+  /*
+    Check if a given sequence of input is accepted.
+  */
+  template <typename _Arg, typename... _Args>
+  bool is_sequence_accepted(_Arg arg, _Args... args) {
+    this->process(arg);
+    if (sizeof...(args) > 0) {
+      return try_accept(args...);
+    } else {
+      return this->in_final_state();
+    }
+  }
+
+  /*
+  Check if an input is accepted.
+  */
+  template <typename... _Args>
+  void is_accepted(_Args... args) {
+    this->process(args...);
+    return this->in_final_state();
+  }
 };
 } // namespace fsm
