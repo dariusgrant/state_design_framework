@@ -1,35 +1,36 @@
 #include "../../include/FiniteStateMachine.hpp"
 #include <cassert>
+#include <cstddef>
 
+namespace EvenZerosExample {
 class EvenState;
 class OddState;
 
-class EvenState : public fsm::final_state_t<class Obj><int> {
+class EvenState : public fsm::final_state_t<std::nullptr_t> {
 public:
-  IncrementState(const shared_ptr_t &s) : fsm::state_t<int>(s) {}
-
-  size_t process() {
-    get_object() += 1;
-    return fsm::state_type_hash_v<CheckState>;
-  }
-};
-
-class CheckState : public fsm::state_t<int> {
-public:
-  CheckState(const shared_ptr_t &s) : fsm::state_t<int>(s) {}
-  size_t process() {
-    if (get_object() < 100) {
-      return fsm::state_type_hash_v<IncrementState>;
+  EvenState(const shared_ptr_t &s) : fsm::final_state_t<std::nullptr_t>(s) {}
+  // TODO change parameter to template arguments that check if the value is
+  // convertible to bool.
+  size_t process(bool is_zero) {
+    if (!is_zero) {
+      return fsm::state_type_hash_v<EvenState>;
     } else {
-      return fsm::state_type_hash_v<FinalState>;
+      return fsm::state_type_hash_v<OddState>;
     }
   }
 };
 
-class FinalState : public fsm::final_state_t<int> {
+class OddState : public fsm::state_t<std::nullptr_t> {
 public:
-  FinalState(const shared_ptr_t &s) : fsm::final_state_t<int>(s) {}
+  OddState(const shared_ptr_t &s) : fsm::state_t<std::nullptr_t>(s) {}
+  size_t process(bool is_zero) {
+    if (!is_zero) {
+      return fsm::state_type_hash_v<OddState>;
+    } else {
+      return fsm::state_type_hash_v<EvenState>;
+    }
+  }
 };
 
-using incrementer_fsm_t =
-    fsm::FiniteStateMachine<int, IncrementState, CheckState, FinalState>;
+using even_zeros_acceptor_t = fsm::Acceptor<EvenState, OddState>;
+}; // namespace EvenZerosExample

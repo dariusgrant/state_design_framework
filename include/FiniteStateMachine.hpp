@@ -131,15 +131,12 @@ private:
 };
 
 template <class _S0, class... _Sn>
-using NullFiniteStateMachine = FiniteStateMachine<std::nullptr_t, _S0, _Sn...>;
-
-template <class _S0, class... _Sn>
-using BooleanFiniteStateMachine = FiniteStateMachine<bool, _S0, _Sn...>;
-
-template <class _S0, class... _Sn>
-class Acceptor : public NullFiniteStateMachine<_S0, _Sn...> {
+class Acceptor : protected FiniteStateMachine<std::nullptr_t, _S0, _Sn...> {
 public:
-  Acceptor() : NullFiniteStateMachine<_S0, _Sn...>(false) {}
+  using FiniteStateMachine<std::nullptr_t, _S0, _Sn...>::reset;
+
+public:
+  Acceptor() : FiniteStateMachine<std::nullptr_t, _S0, _Sn...>() {}
 
   /*
     Check if a given sequence of input is accepted.
@@ -154,12 +151,14 @@ public:
     }
   }
 
+  bool is_accepted() { return this->in_final_state(); }
+
   /*
   Check if an input is accepted.
   */
-  template <typename... _Args>
-  void is_accepted(_Args... args) {
-    this->process(args...);
+  template <typename _Arg, typename... _Args>
+  bool is_accepted(_Arg arg, _Args... args) {
+    this->process(arg, args...);
     return this->in_final_state();
   }
 };

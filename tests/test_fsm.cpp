@@ -1,11 +1,11 @@
 #include "../include/FiniteStateMachine.hpp"
+#include "fsm/even_zeros.hpp"
 #include "fsm/incrementer.hpp"
 #include "fsm/turnstile.hpp"
 #include <cassert>
 
 void test_incrementer_fsm() {
   auto fsm = incrementer_fsm_t();
-  // FinalState is the terminal state
   static_assert(fsm.has_final_state);
 
   // Default values
@@ -14,7 +14,7 @@ void test_incrementer_fsm() {
   assert(!fsm.in_final_state());
   assert(fsm == 0);
 
-  // Run until termination
+  // Run until final state
   while (!fsm.in_final_state()) {
     fsm.process();
   }
@@ -53,6 +53,14 @@ void test_turnstile_fsm() {
   fsm.process(TurnstileExample::Input::push);
   assert(fsm->is_locked());
   assert(!fsm.in_final_state());
+}
+
+void test_even_zeros() {
+  auto fsm = EvenZerosExample::even_zeros_acceptor_t();
+  assert(fsm.is_accepted());
+  assert(!fsm.is_accepted(0));
+  assert(fsm.is_accepted(0));
+  // assert(fsm.is_accepted(0, 0));
 }
 
 int main() {
