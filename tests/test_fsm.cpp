@@ -66,4 +66,5 @@ void test_even_zeros() {
 int main() {
   test_incrementer_fsm();
   test_turnstile_fsm();
+  test_even_zeros();
 }

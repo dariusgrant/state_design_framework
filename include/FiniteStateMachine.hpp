@@ -1,16 +1,15 @@
 #pragma once
 
-#include "ProcessStrategy.hpp"
 #include "State.hpp"
 #include "utility/Environment.hpp"
 #include "utility/StateType.hpp"
 
 #include <cstddef>
-#include <functional>
-#include <future>
-#include <iostream>
+#include <fmtmsg.h>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 
@@ -85,12 +84,9 @@ public:
   _Obj &operator*() const { return *_object; }
   _Obj *operator->() const { return _object.get(); }
 
-  template <typename _Strat = DefaultProcessStrategy, typename... _Args>
-  FiniteStateMachine &process(_Args... args) {
-    static_assert(std::is_base_of_v<AbstractProcessStrategy, _Strat>,
-                  "`_Strat` must derive from `AbstractProcessStrategy`");
+  template <typename... _Args> FiniteStateMachine &process(_Args... args) {
     if (_terminated) {
-      if constexpr (THROW_ON_PROCESS_AFTER_TERMINATION) {
+      if constexpr (fsm::environ::THROW_ON_PROCESS_AFTER_TERMINATION) {
         throw std::runtime_error("FSM already terminated.");
       }
       return *this;
@@ -125,8 +121,29 @@ private:
           // Set current state to the next state
           _current_state_address_iterator =
               _state_address_hash_map.find(next_state_hash);
+
+          if constexpr (fsm::environ::debug) {
+            _debug_print_transition(state_type_hash_v<decltype(s)>);
+          }
         },
         _current_state_address_iterator->second);
+  }
+
+  void _debug_print_transition(size_t previous_state_hash) {
+    std::ostringstream os;
+    os << "previous_state: " << _debug_state_name(previous_state_hash)
+       << ", current_state: " << _debug_current_state_name() << "\n";
+    fmtmsg(MM_SOFT | MM_UTIL | MM_PRINT | MM_RECOVER, "FSM:process", MM_INFO,
+           os.str().data(), nullptr, nullptr);
+  }
+
+  const char *_debug_state_name(const size_t &state_hash) {
+    return typeid(_state_address_hash_map[state_hash]).name();
+  }
+
+  const char *_debug_current_state_name() {
+    return std::visit([&](auto &s) { return typeid(s).name(); },
+                      _current_state_address_iterator->second);
   }
 };
 

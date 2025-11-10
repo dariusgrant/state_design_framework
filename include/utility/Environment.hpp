@@ -1,10 +1,10 @@
 #pragma once
 
-namespace fsm {
+namespace fsm::environ {
 #ifndef NDEBUG
-constexpr bool DEBUG_MODE = true;
+constexpr bool debug = true;
 #else
-constexpr bool DEBUG_MODE = false;
+constexpr bool debug = false;
 #endif
 
 #ifndef FSM_THROW_ON_PROCESS_AFTER_TERMINATION
@@ -20,4 +20,4 @@ constexpr bool ABSTRACT_STATE_FALLTHROUGH = false;
 #else
 constexpr bool ABSTRACT_STATE_FALLTHROUGH = true;
 #endif
-}; // namespace fsm
+}; // namespace fsm::environ

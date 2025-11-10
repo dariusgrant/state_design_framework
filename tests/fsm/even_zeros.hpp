@@ -1,6 +1,8 @@
 #include "../../include/FiniteStateMachine.hpp"
 #include <cassert>
 #include <cstddef>
+#include <sys/acct.h>
+#include <type_traits>
 
 namespace EvenZerosExample {
 class EvenState;
@@ -9,10 +11,9 @@ class OddState;
 class EvenState : public fsm::final_state_t<std::nullptr_t> {
 public:
   EvenState(const shared_ptr_t &s) : fsm::final_state_t<std::nullptr_t>(s) {}
-  // TODO change parameter to template arguments that check if the value is
-  // convertible to bool.
-  size_t process(bool is_zero) {
-    if (!is_zero) {
+  template <class _Int> size_t process(_Int arg) {
+    static_assert(std::is_integral_v<_Int>);
+    if (arg != 0) {
       return fsm::state_type_hash_v<EvenState>;
     } else {
       return fsm::state_type_hash_v<OddState>;
@@ -23,8 +24,9 @@ public:
 class OddState : public fsm::state_t<std::nullptr_t> {
 public:
   OddState(const shared_ptr_t &s) : fsm::state_t<std::nullptr_t>(s) {}
-  size_t process(bool is_zero) {
-    if (!is_zero) {
+  template <class _Int> size_t process(_Int arg) {
+    static_assert(std::is_integral_v<_Int>);
+    if (arg != 0) {
       return fsm::state_type_hash_v<OddState>;
     } else {
       return fsm::state_type_hash_v<EvenState>;
