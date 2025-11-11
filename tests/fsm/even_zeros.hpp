@@ -1,8 +1,4 @@
 #include "../../include/FiniteStateMachine.hpp"
-#include <cassert>
-#include <cstddef>
-#include <sys/acct.h>
-#include <type_traits>
 
 namespace EvenZerosExample {
 class EvenState;

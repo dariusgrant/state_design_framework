@@ -1,6 +1,7 @@
 #include "../include/FiniteStateMachine.hpp"
 #include "fsm/even_zeros.hpp"
 #include "fsm/incrementer.hpp"
+#include "fsm/negotiation_protocol.hpp"
 #include "fsm/turnstile.hpp"
 #include <cassert>
 
@@ -60,7 +61,10 @@ void test_even_zeros() {
   assert(fsm.is_accepted());
   assert(!fsm.is_accepted(0));
   assert(fsm.is_accepted(0));
-  // assert(fsm.is_accepted(0, 0));
+}
+
+void test_negotiation_protocol() {
+  auto fsm = NegotiationProtocol::negotiation_protocol_fsm_t();
 }
 
 int main() {
