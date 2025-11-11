@@ -12,6 +12,7 @@
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
+#include <variant>
 
 namespace fsm {
 class BaseFiniteStateMachine {
@@ -108,6 +109,11 @@ public:
 
   bool in_final_state() const {
     return std::visit([&](auto &s) { return s->is_final; },
+                      _current_state_address_iterator->second);
+  }
+
+  std::size_t get_current_state_type_hash() {
+    return std::visit([&](auto &s) { return state_type_hash_v<decltype(s)>; },
                       _current_state_address_iterator->second);
   }
 

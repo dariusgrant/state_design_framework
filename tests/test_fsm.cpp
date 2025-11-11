@@ -65,6 +65,10 @@ void test_even_zeros() {
 
 void test_negotiation_protocol() {
   auto fsm = NegotiationProtocol::negotiation_protocol_fsm_t();
+  auto validator = NegotiationProtocol::Validaton::Validator(fsm);
+  assert((validator.test<NegotiationProtocol::StartState,
+                        NegotiationProtocol::InitiateState>(
+      NegotiationProtocol::Input::trigger)));
 }
 
 int main() {
