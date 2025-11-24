@@ -3,9 +3,9 @@
 #include "State.hpp"
 #include "utility/Environment.hpp"
 #include "utility/StateType.hpp"
-
 #include <cstddef>
 #include <fmtmsg.h>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -67,6 +67,7 @@ protected:
       _state_address_hash_map; // State type hash to state address
   typename state_address_hash_map_t::iterator
       _current_state_address_iterator; // The current state's iterator
+  size_t _current_state_hash;
 
 public:
   template <typename... _ObjArgs>
@@ -79,7 +80,18 @@ public:
              {state_type_hash_v<_Sn>,
               state_address_variant_t(&std::get<_Sn>(_states))}...}),
         _current_state_address_iterator(
-            _state_address_hash_map.find(state_type_hash_v<_S0>)) {}
+            _state_address_hash_map.find(state_type_hash_v<_S0>)),
+        _current_state_hash(state_type_hash_v<_S0>) {
+    if (_current_state_address_iterator == _state_address_hash_map.end()) {
+      abort();
+    }
+    auto initial_state = std::get<0>(_states);
+    std::ostringstream os;
+    os << "initial state: " << typeid(initial_state).name() << " - "
+       << initial_state.get_hash();
+    fmtmsg(MM_SOFT | MM_UTIL | MM_PRINT | MM_RECOVER, "FSM:process", MM_INFO,
+           os.str().data(), nullptr, nullptr);
+  }
 
   operator _Obj &() { return *_object; }
   _Obj &operator*() const { return *_object; }
@@ -112,10 +124,7 @@ public:
                       _current_state_address_iterator->second);
   }
 
-  std::size_t get_current_state_type_hash() {
-    return std::visit([&](auto &s) { return state_type_hash_v<decltype(s)>; },
-                      _current_state_address_iterator->second);
-  }
+  std::size_t get_current_state_hash() const { return _current_state_hash; }
 
 private:
   template <typename... _Args> void _process_state(_Args... args) {
@@ -127,6 +136,8 @@ private:
           // Set current state to the next state
           _current_state_address_iterator =
               _state_address_hash_map.find(next_state_hash);
+
+          _current_state_hash = next_state_hash;
 
           if constexpr (fsm::environ::debug) {
             _debug_print_transition(state_type_hash_v<decltype(s)>);

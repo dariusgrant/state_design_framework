@@ -22,6 +22,10 @@ public:
 
   State(const shared_ptr_t &obj) : _obj(obj) {}
 
+  constexpr size_t get_hash() const {
+    return state_type_hash_v<decltype(*this)>;
+  }
+
   obj_t &get_object() {
     if (_obj.expired()) {
       throw;
