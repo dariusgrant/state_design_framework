@@ -5,7 +5,6 @@
 #include "utility/StateType.hpp"
 #include <cstddef>
 #include <fmtmsg.h>
-#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -81,17 +80,7 @@ public:
               state_address_variant_t(&std::get<_Sn>(_states))}...}),
         _current_state_address_iterator(
             _state_address_hash_map.find(state_type_hash_v<_S0>)),
-        _current_state_hash(state_type_hash_v<_S0>) {
-    if (_current_state_address_iterator == _state_address_hash_map.end()) {
-      abort();
-    }
-    auto initial_state = std::get<0>(_states);
-    std::ostringstream os;
-    os << "initial state: " << typeid(initial_state).name() << " - "
-       << initial_state.get_hash();
-    fmtmsg(MM_SOFT | MM_UTIL | MM_PRINT | MM_RECOVER, "FSM:process", MM_INFO,
-           os.str().data(), nullptr, nullptr);
-  }
+        _current_state_hash(state_type_hash_v<_S0>) {}
 
   operator _Obj &() { return *_object; }
   _Obj &operator*() const { return *_object; }

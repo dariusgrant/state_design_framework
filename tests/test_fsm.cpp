@@ -1,4 +1,5 @@
 #include "../include/FiniteStateMachine.hpp"
+#include "../include/utility/Validation.hpp"
 #include "fsm/even_zeros.hpp"
 #include "fsm/incrementer.hpp"
 #include "fsm/negotiation_protocol.hpp"
@@ -65,14 +66,15 @@ void test_even_zeros() {
 
 void test_negotiation_protocol() {
   auto fsm = NegotiationProtocol::negotiation_protocol_fsm_t();
-  auto validator = NegotiationProtocol::Validaton::Validator(fsm);
+  auto validator = fsm::validation::Validator(fsm);
   assert((validator.test<NegotiationProtocol::StartState,
-                        NegotiationProtocol::InitiateState>(
+                         NegotiationProtocol::InitiateState>(
       NegotiationProtocol::Input::trigger)));
 }
 
-int main() {
+int main(int, const char **) {
   test_incrementer_fsm();
   test_turnstile_fsm();
   test_even_zeros();
+  test_negotiation_protocol();
 }
