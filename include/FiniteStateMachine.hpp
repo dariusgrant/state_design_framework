@@ -168,7 +168,7 @@ public:
   bool is_sequence_accepted(_Arg arg, _Args... args) {
     this->process(arg);
     if (sizeof...(args) > 0) {
-      return try_accept(args...);
+      return is_sequence_accepted(args...);
     } else {
       return this->in_final_state();
     }

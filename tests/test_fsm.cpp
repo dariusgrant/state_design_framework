@@ -10,14 +10,17 @@ void test_incrementer_fsm() {
   auto fsm = incrementer_fsm_t();
   static_assert(fsm.has_final_state);
 
+  auto validator = fsm::validation::Validator(fsm);
+
   // Default values
   assert(!fsm.has_started());
   assert(!fsm.is_terminated());
   assert(!fsm.in_final_state());
-  assert(fsm == 0);
+  assert(validator.check([](auto i) { return i == 0; }));
 
   // Run until final state
   while (!fsm.in_final_state()) {
+    assert((validator.test<IncrementState, CheckState>()));
     fsm.process();
   }
 
