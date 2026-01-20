@@ -1,188 +1,243 @@
 #pragma once
-
-#include "State.hpp"
-#include "utility/Environment.hpp"
-#include "utility/StateType.hpp"
+#include <algorithm>
 #include <cstddef>
-#include <fmtmsg.h>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
-#include <variant>
+#include <utility>
+#include <vector>
 
-namespace fsm {
-class BaseFiniteStateMachine {
-protected:
-  bool _started;
-  bool _terminated;
+using state_hash_t = std::size_t;
+
+template <typename _InputType, typename _OutputType> class State {
+public:
+  using input_t = _InputType;
+  using output_t = _OutputType;
+  using output_state_pair_t = std::pair<_OutputType, state_hash_t>;
 
 public:
-  BaseFiniteStateMachine() : _started(false), _terminated(false) {}
+  virtual ~State() {}
 
-  bool has_started() const { return _started; }
-  bool is_terminated() const { return _terminated; }
-  void start() {
-    if (!_started) {
-      _started = true;
-    }
-  }
-  void terminate() {
-    if (_started && !_terminated) {
-      _terminated = true;
-    }
-  }
+  virtual output_state_pair_t operator()() = 0;
+  virtual output_state_pair_t operator()(_InputType) = 0;
 };
 
-template <class _Obj, class _S0, class... _Sn>
-class FiniteStateMachine : public BaseFiniteStateMachine {
-  // Reject template type that isn't a state.
-  static_assert((std::is_base_of_v<state_t<_Obj>, _S0> ||
-                 std::is_base_of_v<final_state_t<_Obj>, _S0>) ||
-                    ((std::is_base_of_v<state_t<_Obj>, _Sn> ||
-                      std::is_base_of_v<final_state_t<_Obj>, _Sn>) ||
-                     ...),
-                "The state does not derived from class `State`");
+template <class _T>
+const static inline state_hash_t state_hash_v =
+    typeid(std::decay_t<_T> *).hash_code();
+
+template <class _T> static inline state_hash_t get_type_hash(_T &) {
+  return state_hash_v<_T>;
+}
+
+template <typename _InputType, typename _OutputType, class _State,
+          class... _States>
+class FiniteStateMachine {
+  friend class DebugFiniteStateMachine;
 
 public:
-  using obj_t = _Obj;
-  using shared_ptr_t = std::shared_ptr<_Obj>;
-  using state_tuple_t = std::tuple<_S0, _Sn...>;
-  using state_address_variant_t = std::variant<_S0 *, _Sn *...>;
-  using state_address_hash_map_t =
-      std::unordered_map<size_t, state_address_variant_t>;
+  using state_input_t = _InputType;
+  using state_output_t = _OutputType;
+  using state_base_t = State<_InputType, _OutputType>;
+  using state_tuple_t = std::tuple<_State, _States...>;
+  using state_map_t =
+      std::unordered_map<state_hash_t, std::unique_ptr<state_base_t>>;
+  using state_map_iterator_t = typename state_map_t::iterator;
 
-  // Does this FSM contain a terminal state?
-  static constexpr bool has_final_state =
-      (std::is_base_of_v<fsm::final_state_t<_Obj>, _S0> ||
-       (std::is_base_of_v<fsm::final_state_t<_Obj>, _Sn> || ...));
-
-protected:
-  shared_ptr_t _object;  // The object being managed by the FSM
-  state_tuple_t _states; // The states of the objected
-  state_address_hash_map_t
-      _state_address_hash_map; // State type hash to state address
-  typename state_address_hash_map_t::iterator
-      _current_state_address_iterator; // The current state's iterator
-  size_t _current_state_hash;
-
-public:
-  template <typename... _ObjArgs>
-  FiniteStateMachine(_ObjArgs... args)
-      : BaseFiniteStateMachine(), _object(std::make_shared<_Obj>(args...)),
-        _states(std::make_tuple(_S0(_object), _Sn(_object)...)),
-        _state_address_hash_map(
-            {{state_type_hash_v<_S0>,
-              state_address_variant_t(&std::get<_S0>(_states))},
-             {state_type_hash_v<_Sn>,
-              state_address_variant_t(&std::get<_Sn>(_states))}...}),
-        _current_state_address_iterator(
-            _state_address_hash_map.find(state_type_hash_v<_S0>)),
-        _current_state_hash(state_type_hash_v<_S0>) {}
-
-  operator _Obj &() { return *_object; }
-  _Obj &operator*() const { return *_object; }
-  _Obj *operator->() const { return _object.get(); }
-
-  template <typename... _Args> FiniteStateMachine &process(_Args... args) {
-    if (_terminated) {
-      if constexpr (fsm::environ::THROW_ON_PROCESS_AFTER_TERMINATION) {
-        throw std::runtime_error("FSM already terminated.");
-      }
-      return *this;
-    }
-
-    if (_started) {
-      _process_state(args...);
-    } else {
-      start();
-      _process_state(args...);
-    }
-    return *this;
-  }
-
-  template <typename... _ObjArgs> FiniteStateMachine &reset(_ObjArgs... args) {
-    *this = FiniteStateMachine(args...);
-    return *this;
-  }
-
-  bool in_final_state() const {
-    return std::visit([&](auto &s) { return s->is_final; },
-                      _current_state_address_iterator->second);
-  }
-
-  std::size_t get_current_state_hash() const { return _current_state_hash; }
+  static constexpr size_t state_count = 1 + sizeof...(_States);
 
 private:
-  template <typename... _Args> void _process_state(_Args... args) {
-    std::visit(
-        [&](auto &s) {
-          // Process current state and get the next state's hash
-          auto next_state_hash = s->process(args...);
-
-          // Set current state to the next state
-          _current_state_address_iterator =
-              _state_address_hash_map.find(next_state_hash);
-
-          _current_state_hash = next_state_hash;
-
-          if constexpr (fsm::environ::debug) {
-            _debug_print_transition(state_type_hash_v<decltype(s)>);
-          }
-        },
-        _current_state_address_iterator->second);
-  }
-
-  void _debug_print_transition(size_t previous_state_hash) {
-    std::ostringstream os;
-    os << "previous_state: " << _debug_state_name(previous_state_hash)
-       << ", current_state: " << _debug_current_state_name() << "\n";
-    fmtmsg(MM_SOFT | MM_UTIL | MM_PRINT | MM_RECOVER, "FSM:process", MM_INFO,
-           os.str().data(), nullptr, nullptr);
-  }
-
-  const char *_debug_state_name(const size_t &state_hash) {
-    return typeid(_state_address_hash_map[state_hash]).name();
-  }
-
-  const char *_debug_current_state_name() {
-    return std::visit([&](auto &s) { return typeid(s).name(); },
-                      _current_state_address_iterator->second);
-  }
-};
-
-template <class _S0, class... _Sn>
-class Acceptor : protected FiniteStateMachine<std::nullptr_t, _S0, _Sn...> {
-public:
-  using FiniteStateMachine<std::nullptr_t, _S0, _Sn...>::reset;
+  state_map_t _states;
+  state_map_iterator_t _current_state_it;
+  state_hash_t _current_state_hash;
+  std::vector<state_hash_t> _acceptance_states;
 
 public:
-  Acceptor() : FiniteStateMachine<std::nullptr_t, _S0, _Sn...>() {}
+  FiniteStateMachine()
+      : _states(state_count), _current_state_it(_states.end()) {
+    _states.emplace(
+        std::make_pair(state_hash_v<_State>, std::make_unique<_State>()));
 
-  /*
-    Check if a given sequence of input is accepted.
-  */
-  template <typename _Arg, typename... _Args>
-  bool is_sequence_accepted(_Arg arg, _Args... args) {
-    this->process(arg);
-    if (sizeof...(args) > 0) {
-      return is_sequence_accepted(args...);
-    } else {
-      return this->in_final_state();
+    _states.emplace(
+        std::make_pair(state_hash_v<_States>, std::make_unique<_States>())...);
+
+    _transition(state_hash_v<_State>);
+    if (_current_state_it == _states.end()) {
+      throw std::runtime_error("Failed to set initial state");
     }
   }
 
-  bool is_accepted() { return this->in_final_state(); }
+  FiniteStateMachine &reset() {
+    *this = FiniteStateMachine();
+    return *this;
+  }
 
-  /*
-  Check if an input is accepted.
-  */
-  template <typename _Arg, typename... _Args>
-  bool is_accepted(_Arg arg, _Args... args) {
-    this->process(arg, args...);
-    return this->in_final_state();
+  _OutputType step() {
+    auto &current_state = _get_current_state();
+    auto [output, next] = current_state();
+    _transition(next);
+    return output;
+  }
+
+  _OutputType step(_InputType input) {
+    auto &current_state = _get_current_state();
+    auto [output, next] = current_state(input);
+    _transition(next);
+    return output;
+  }
+
+  template <class... RemainingInputType>
+  _OutputType transduce(_InputType input, RemainingInputType... inputs) {
+    step(input);
+    return transduce(inputs...);
+  }
+
+  _OutputType transduce(size_t count = 1) {
+    if (count == 0) {
+      return step();
+    } else {
+      step();
+      return transduce(count - 1);
+    }
+  }
+
+  template <class State> bool is_acceptance_state() {
+    return std::find(_acceptance_states.begin(), _acceptance_states.end(),
+                     state_hash_v<State>) != _acceptance_states.end();
+  }
+
+  template <class State, class... States> void register_acceptance_state() {
+    static_assert(std::is_same_v<State, _State> ||
+                  std::is_same_v<State, _States...>);
+    if (!is_acceptance_state<State>()) {
+      _acceptance_states.push_back(state_hash_v<State>);
+    }
+
+    register_acceptance_state<States...>();
+  }
+
+  template <class State, class... States> void deregister_acceptance_state() {
+    static_assert(std::is_same_v<State, _State> ||
+                  std::is_same_v<State, _States...>);
+    if (is_acceptance_state<State>()) {
+      std::remove(_acceptance_states.begin(), _acceptance_states.end(),
+                  state_hash_v<State>);
+    }
+
+    deregister_acceptance_state<States...>();
+  }
+
+  template <class State> bool is_current_state() const {
+    return _current_state_it == _states.find(state_hash_v<State>);
+  }
+
+  state_hash_t current_state_hash() const { return _current_state_hash; }
+
+  bool is_current_state_valid() const {
+    return _current_state_it != _states.end();
+  }
+
+protected:
+  state_base_t &_get_current_state() {
+    if (!is_current_state_valid()) {
+      throw std::runtime_error("Current state is invalid.");
+    }
+    return *_current_state_it->second;
+  }
+
+  void _transition(size_t next) {
+    _current_state_it = _states.find(next);
+    if (!is_current_state_valid()) {
+      _current_state_hash = 0;
+    } else {
+      _current_state_hash = next;
+    }
   }
 };
-} // namespace fsm
+
+class DebugFiniteStateMachine {
+public:
+  template <class _Fsm>
+  static state_hash_t current_state_hash(const _Fsm &automaton) {
+    return get_type_hash(automaton._current_state);
+  }
+
+  template <class _Fsm> static std::string state_info(const _Fsm &automaton) {
+    std::ostringstream os;
+    os << "State,State Hash\n";
+    std::for_each(automaton._states.begin(), automaton._states.end(),
+                  [&os](auto &state_mapping) {
+                    os << typeid(state_mapping.second).name() << ","
+                       << state_mapping.first << "\n";
+                  });
+    return os.str();
+  }
+
+  template <class _Fsm>
+  static std::string current_state_info(const _Fsm &automaton) {
+    std::ostringstream os;
+    // os << "Current State,State Hash\n" +
+    //           std::string(typeid(automaton._get_current_state()).name()) +
+    //           "," + std::to_string(current_state_hash(automaton)) + "\n";
+    return os.str();
+  }
+};
+
+template <class _Fsm0, class _Fsm1> struct is_cascadable {
+  static constexpr bool value = std::is_same_v<typename _Fsm0::state_output_t,
+                                               typename _Fsm1::state_input_t>;
+};
+
+// template <class _Fsm0, class _Fsm1>
+// constexpr bool is_cascadable_v = is_cascadable<_Fsm0, _Fsm1>::value;
+
+template <class _Fsm0, class _Fsm1, class... _Fsmn>
+constexpr bool is_cascadable_v = is_cascadable<_Fsm0, _Fsm1>::value;
+/*
+`CascadingFiniteStateMachine` composes of 2 or more finite state machines
+in which they are connected where the output of the one is the input to
+the next.
+*/
+template <class _Fsm0, class _Fsm1, class... _Fsmn>
+class CascadingFiniteStateMachine {
+  static_assert(is_cascadable_v<_Fsm0, _Fsm1, _Fsmn...>);
+
+public:
+  static constexpr size_t fsm_count = 2 + sizeof...(_Fsmn);
+
+  using fsm_tuple_t = std::tuple<_Fsm0 &, _Fsm1 &, _Fsmn &...>;
+  using input_t = typename _Fsm0::state_input_t;
+  using output_t = typename std::decay_t<
+      std::tuple_element_t<fsm_count - 1, fsm_tuple_t>>::state_output_t;
+
+protected:
+  fsm_tuple_t _fsms;
+
+public:
+  CascadingFiniteStateMachine(_Fsm0 &fsm0, _Fsm1 &fsm1, _Fsmn &...fsmn)
+      : _fsms(fsm_tuple_t(fsm0, fsm1, fsmn...)) {}
+
+  output_t step() {
+    auto out = std::get<0>(_fsms).step();
+    return _cascade_step(out, 1);
+  }
+
+  output_t step(input_t input) {
+    auto out = std::get<0>(_fsms).step(input);
+    return _cascade_step(out, 1);
+  }
+
+protected:
+  template <typename FsmOutput>
+  output_t _cascade_step(FsmOutput out, const size_t index = 1) {
+    if (index < fsm_count - 1) {
+      auto next_out = std::get<index>(_fsms).step(out);
+      return _cascade_step(index + 1, next_out);
+    } else {
+      return std::get<index>(_fsms).step(out);
+    }
+  }
+};
