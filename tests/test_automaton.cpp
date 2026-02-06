@@ -1,91 +1,121 @@
-#include "../include/FiniteStateMachine.hpp"
+#include "FiniteStateMachine.hpp"
 #include <cassert>
+#include <chrono>
 #include <iostream>
-#include <string>
 
-using int_int_state = State<int, int>;
-class S1;
-class S2;
+enum class LightState {
+  UNKNOWN,
+  OFF,
+  RED,
+  YELLOW,
+  GREEN,
+};
 
-class S1 : public int_int_state {
+struct LightInput {
+  bool started;
+  std::chrono::high_resolution_clock::time_point end_time;
+};
+
+class LightStateNode : public StateNode<LightState> {
 public:
-  output_state_pair_t operator()() { return {-1, state_hash_v<S1>}; }
-  output_state_pair_t operator()(int input) {
-    return {input + 1, state_hash_v<S2>};
+  const LightState state;
+
+  LightStateNode(std::string name, LightState state)
+      : StateNode(name), state(state) {}
+
+  StateTransition process(void *input) override {
+    std::cout << "Entering " << name << " State\n";
+    if (!input) {
+      std::cout << "Received nullptr - noop\n";
+      return StateTransition(state, nullptr);
+    }
+
+    return _process_impl(static_cast<LightInput *>(input));
+  }
+
+  virtual StateTransition _process_impl(LightInput *input) = 0;
+
+  bool reached_end_time(
+      std::chrono::high_resolution_clock::time_point end_time) const {
+    return std::chrono::high_resolution_clock::now() >= end_time;
+  }
+
+  LightStateNode *get_light_state_node(std::string state) {
+    return static_cast<LightStateNode *>(get_child(state));
+  }
+
+  StateTransition transition_on_endtime(LightInput *input, std::string state) {
+    if (input->end_time.time_since_epoch().count() == 0) {
+      std::cout << "No end time set\n";
+      return StateTransition(this->state, this);
+    } else if (!reached_end_time(input->end_time)) {
+      std::cout << "Waiting "
+                << (input->end_time - std::chrono::high_resolution_clock::now())
+                       .count()
+                << "seconds...\n";
+      return StateTransition(this->state, this);
+    } else {
+      auto next = get_light_state_node(state);
+      return StateTransition(next->state, next);
+    }
   }
 };
 
-class S2 : public int_int_state {
+class OffState : public LightStateNode {
 public:
-  output_state_pair_t operator()() { return {-1, state_hash_v<S2>}; }
-  output_state_pair_t operator()(int input) {
-    return {input + 2, state_hash_v<S1>};
+  OffState() : LightStateNode("Off", LightState::OFF) {}
+
+  StateTransition _process_impl(LightInput *input) override {
+    if (input->started) {
+      std::cout << "Starting Race Light!\n";
+      auto next = get_light_state_node("Red");
+      return StateTransition(next->state, next);
+    }
+    return StateTransition(state, nullptr);
   }
 };
 
-class S3;
-
-using int_string_state = State<int, std::string>;
-class S3 : public int_string_state {
+class RedState : public LightStateNode {
 public:
-  output_state_pair_t operator()() { return {"", state_hash_v<S3>}; }
-  output_state_pair_t operator()(int input) {
-    return {std::to_string(input), state_hash_v<S3>};
+  RedState() : LightStateNode("Red", LightState::RED) {}
+
+  StateTransition _process_impl(LightInput *input) override {
+    return transition_on_endtime(input, "Yellow");
   }
 };
 
-int main(int, const char **) {
-  S1 s1;
-  assert((s1() == std::make_pair(-1, state_hash_v<S1>)));
-  assert((s1(1) == std::make_pair(2, state_hash_v<S2>)));
+class YellowState : public LightStateNode {
+public:
+  YellowState() : LightStateNode("Yellow", LightState::YELLOW) {}
 
-  S2 s2;
-  assert((s2() == std::make_pair(-1, state_hash_v<S2>)));
-  assert((s2(2) == std::make_pair(4, state_hash_v<S1>)));
+  StateTransition _process_impl(LightInput *input) override {
+    return transition_on_endtime(input, "Green");
+  }
+};
 
-  FiniteStateMachine<int, int, S1> fsm1;
-  assert(fsm1.state_count == 1);
-  assert((fsm1.is_current_state<S1>()));
-  assert((fsm1.current_state_hash() == state_hash_v<S1>));
-  assert(fsm1.is_current_state_valid());
+class GreenState : public LightStateNode {
+public:
+  GreenState() : LightStateNode("Green", LightState::GREEN) {}
 
-  assert(fsm1.step() == -1);
-  assert(fsm1.is_current_state_valid());
+  StateTransition _process_impl(LightInput *input) override {
+    if (input->started) {
+      auto next = get_light_state_node("Red");
+      return StateTransition(next->state, next);
+    }
+    return transition_on_endtime(input, "Off");
+  }
+};
 
-  assert((fsm1.is_current_state<S1>()));
-  assert(fsm1.is_current_state_valid());
+int main() {
+  auto off = OffState();
+  auto red = RedState();
+  auto yellow = YellowState();
+  auto green = GreenState();
 
-  assert(fsm1.step(5) == 6);
-  assert(!(fsm1.is_current_state<S1>()));
-  assert(fsm1.current_state_hash() == 0);
-  assert(!fsm1.is_current_state_valid());
+  off.connect(&red);
 
-  FiniteStateMachine<int, int, S1, S2> fsm2;
-  assert(fsm2.state_count == 2);
-  assert((fsm2.is_current_state<S1>()));
-  assert(fsm2.is_current_state_valid());
+  auto input = LightInput();
+  auto fsm = FiniteStateMachine(&off);
 
-  assert(fsm2.step() == -1);
-  assert(fsm2.is_current_state_valid());
-
-  assert((fsm2.is_current_state<S1>()));
-  assert(fsm2.is_current_state_valid());
-
-  assert(fsm2.step(5) == 6);
-  assert((fsm2.is_current_state<S2>()));
-  assert(fsm2.is_current_state_valid());
-
-  assert(fsm2.step() == -1);
-  assert((fsm2.is_current_state<S2>()));
-  assert(fsm2.is_current_state_valid());
-
-  assert(fsm2.step(6) == 8);
-  assert((fsm2.is_current_state<S1>()));
-  assert(fsm2.is_current_state_valid());
-
-  FiniteStateMachine<int, std::string, S3> fsm3;
-  std::cout << fsm3.step(fsm2.step(8));
-
-  auto cascade_fsm = CascadingFiniteStateMachine(fsm2, fsm3);
-  cascade_fsm.step(5);
+  assert(fsm.transduce(input) == LightState::OFF);
 }
