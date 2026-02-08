@@ -13,10 +13,9 @@ enum class LightState {
   GREEN,
 };
 
-struct LightInput {
-  bool started;
-  std::chrono::high_resolution_clock::time_point end_time;
-};
+class LightInput
+    : public InputVariant<bool,
+                          std::chrono::high_resolution_clock::time_point> {};
 
 class LightStateNode : public StateNode<LightInput, LightState> {
 public:
@@ -25,16 +24,16 @@ public:
   LightStateNode(std::string name, LightState state)
       : StateNode(name), state(state) {}
 
-  void enter(LightInput *) override {
+  void enter(const LightInput &input) override {
     std::cout << "Entering " << name << " State\n";
   }
 
-  void exit(LightInput *) override {
+  void exit(const LightInput &input) override {
     std::cout << "Exiting " << name << " State\n";
   }
 
-  StateTransition process(LightInput *input) override {
-    if (!input) {
+  StateTransition process(const LightInput &input) override {
+    if (input.index() == 0) {
       std::cout << "Received nullptr\n";
       return state;
     }
@@ -42,22 +41,28 @@ public:
     return _process_impl(input);
   }
 
-  virtual StateTransition _process_impl(LightInput *input) = 0;
+  virtual StateTransition _process_impl(const LightInput &input) = 0;
 
   bool reached_end_time(
       std::chrono::high_resolution_clock::time_point end_time) const {
     return std::chrono::high_resolution_clock::now() >= end_time;
   }
 
-  StateTransition transition_on_endtime(LightInput *input, std::string state) {
-    if (input->end_time.time_since_epoch().count() == 0) {
+  StateTransition transition_on_endtime(const LightInput &input,
+                                        std::string state) {
+    auto end_time =
+        std::get_if<std::chrono::high_resolution_clock::time_point>(&input);
+    if (!end_time) {
+      std::cout << "Input is not a `time_point`.\n";
+      return this->state;
+    } else if (end_time->time_since_epoch().count() == 0) {
       std::cout << "No end time set\n";
       return this->state;
-    } else if (!reached_end_time(input->end_time)) {
-      std::cout << "Waiting "
-                << (input->end_time - std::chrono::high_resolution_clock::now())
-                       .count()
-                << "seconds...\n";
+    } else if (!reached_end_time(*end_time)) {
+      std::cout
+          << "Waiting "
+          << (*end_time - std::chrono::high_resolution_clock::now()).count()
+          << "seconds...\n";
       return this->state;
     } else {
       auto next = get_child<LightStateNode>(state);
@@ -70,13 +75,19 @@ class OffState : public LightStateNode {
 public:
   OffState() : LightStateNode("Off", LightState::OFF) {}
 
-  StateTransition _process_impl(LightInput *input) override {
-    if (input->started) {
+  StateTransition _process_impl(const LightInput& input) override {
+    auto started = std::get_if<bool>(&input);
+
+    if (started == nullptr) {
+      std::cout << "Input is not `bool`.\n";
+      return state;
+    } else if (!(*started)) {
+      std::cout << "Race Light not started.\n";
+      return state;
+    } else {
       std::cout << "Starting Race Light!\n";
       auto next = get_child<LightStateNode>("Red");
       return {next->state, next};
-    } else {
-      return state;
     }
   }
 };
@@ -85,7 +96,7 @@ class RedState : public LightStateNode {
 public:
   RedState() : LightStateNode("Red", LightState::RED) {}
 
-  StateTransition _process_impl(LightInput *input) override {
+  StateTransition _process_impl(const LightInput &input) override {
     return transition_on_endtime(input, "Yellow");
   }
 };
@@ -94,7 +105,7 @@ class YellowState : public LightStateNode {
 public:
   YellowState() : LightStateNode("Yellow", LightState::YELLOW) {}
 
-  StateTransition _process_impl(LightInput *input) override {
+  StateTransition _process_impl(const LightInput &input) override {
     return transition_on_endtime(input, "Green");
   }
 };
@@ -103,12 +114,17 @@ class GreenState : public LightStateNode {
 public:
   GreenState() : LightStateNode("Green", LightState::GREEN) {}
 
-  StateTransition _process_impl(LightInput *input) override {
-    if (input->started) {
+  StateTransition _process_impl(const LightInput &input) override {
+    auto started = std::get_if<bool>(&input);
+    if (started == nullptr) {
+      std::cout << "Input is not `bool`.\n";
+      return state;
+    } else if (*started) {
       auto next = get_child<LightStateNode>("Red");
       return {next->state, next};
+    } else {
+      return transition_on_endtime(input, "Off");
     }
-    return transition_on_endtime(input, "Off");
   }
 };
 
@@ -161,5 +177,5 @@ int main() {
   assert(fsm.transduce() == LightState::OFF);
 
   auto input = LightInput();
-  assert(fsm.transduce(&input) == LightState::OFF);
+  assert(fsm.transduce(input) == LightState::OFF);
 }

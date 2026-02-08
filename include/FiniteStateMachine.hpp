@@ -1,7 +1,9 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
+#include <variant>
 
 class Node {
 public:
@@ -73,28 +75,36 @@ public:
   // `enter` will be invoked upon a FSM transitioning into this `StateNode`.
   // The input that was used to exit the previous `StateNode` will be the input
   // to this `StateNode`.
-  virtual void enter(input_t *) {}
+  virtual void enter(const input_t &input) {}
 
   // `exit` will be invoked upon a FSM transitioning out of this `StateNode`.
   // The input is the same of when the previous `process` function was invoked.
-  virtual void exit(input_t *) {}
+  virtual void exit(const input_t &input) {}
 
   // `process` will be invoked upon a FSM receiving input. It will return a
   // `StateTransition` that has the next state and output after processing.
-  virtual StateTransition process(input_t *) = 0;
+  virtual StateTransition process(const input_t &input) = 0;
 };
 
-template <typename _Input, typename _Output> class FiniteStateMachine {
+template <typename... _Inputs>
+class InputVariant : public std::variant<std::monostate, _Inputs...> {
 public:
-  using input_t = _Input;
+  using input_types_t = std::tuple<_Inputs...>;
+  
+};
+
+template <typename _InputVariant, typename _Output> class FiniteStateMachine {
+//   static_assert(std::is_same_v<_InputVariant, InputVariant<typename _InputVariant::input_types_t>>);
+public:
+  using input_variant_t = _InputVariant;
   using output_t = _Output;
-  using state_node_t = StateNode<input_t, output_t>;
+  using state_node_t = StateNode<input_variant_t, output_t>;
 
 private:
   state_node_t *_current;
 
 public:
-  FiniteStateMachine(state_node_t *initial, input_t *arg = nullptr)
+  FiniteStateMachine(state_node_t *initial, const input_variant_t& arg = input_variant_t())
       : _current(initial) {
     if (!_current) {
       throw std::runtime_error("No initial state set in FSM.\n");
@@ -104,7 +114,7 @@ public:
 
   const state_node_t *current_state() const { return _current; }
 
-  output_t transduce(input_t *input = nullptr) {
+  output_t transduce(const input_variant_t & input = input_variant_t()) {
     if (!_current) {
       throw std::runtime_error("No current state for FSM\n");
     }
@@ -117,7 +127,7 @@ public:
   }
 
 protected:
-  void _transition(state_node_t *state, input_t *input) {
+  void _transition(state_node_t *state, const input_variant_t& input) {
     if (!_current->has_child(state)) {
       throw std::runtime_error("Invalid transition from " + _current->name +
                                " to " + state->name);
