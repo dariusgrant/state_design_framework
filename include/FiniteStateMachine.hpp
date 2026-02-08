@@ -53,75 +53,77 @@ public:
   }
 };
 
-template <typename _Output> class StateNode : public Node {
+template <typename _Input, typename _Output> class StateNode : public Node {
 public:
-  using state_node_t = StateNode<_Output>;
+  using state_node_t = StateNode<_Input, _Output>;
+  using input_t = _Input;
   using output_t = _Output;
 
   struct StateTransition {
     output_t output;
-    state_node_t *next;
+    state_node_t *state;
 
-    StateTransition(output_t output, state_node_t *next)
-        : output(output), next(next) {}
+    StateTransition(output_t output, state_node_t *next = nullptr)
+        : output(output), state(next) {}
   };
 
 public:
   StateNode(std::string name) : Node(name) {}
 
-  // Default implementation for state processing - NOOP. Returns this node.
-  virtual StateTransition process(void *) = 0;
+  // `enter` will be invoked upon a FSM transitioning into this `StateNode`.
+  // The input that was used to exit the previous `StateNode` will be the input
+  // to this `StateNode`.
+  virtual void enter(input_t *) {}
 
-  StateNode *get_child(std::string name) {
-    auto child = Node::get_child<StateNode>(name);
-    return child ? child : nullptr;
-  }
+  // `exit` will be invoked upon a FSM transitioning out of this `StateNode`.
+  // The input is the same of when the previous `process` function was invoked.
+  virtual void exit(input_t *) {}
+
+  // `process` will be invoked upon a FSM receiving input. It will return a
+  // `StateTransition` that has the next state and output after processing.
+  virtual StateTransition process(input_t *) = 0;
 };
 
-template <typename _Output> class FiniteStateMachine {
+template <typename _Input, typename _Output> class FiniteStateMachine {
 public:
-  using state_node_t = StateNode<_Output>;
+  using input_t = _Input;
+  using output_t = _Output;
+  using state_node_t = StateNode<input_t, output_t>;
 
 private:
   state_node_t *_current;
 
 public:
-  template <typename _Arg = std::nullptr_t>
-  FiniteStateMachine(state_node_t *initial, _Arg arg = _Arg(),
-                     _Output *output = nullptr)
+  FiniteStateMachine(state_node_t *initial, input_t *arg = nullptr)
       : _current(initial) {
     if (!_current) {
-      return;
+      throw std::runtime_error("No initial state set in FSM.\n");
     }
-    auto transition = _current->process(arg);
-    if (output) {
-      *output = transition.output;
-    }
-    if (transition.next) {
-      _transition(transition.next);
-    }
+    _current->enter(arg);
   }
 
   const state_node_t *current_state() const { return _current; }
 
-  template <typename _T> _Output transduce(_T &input) {
+  output_t transduce(input_t *input = nullptr) {
     if (!_current) {
       throw std::runtime_error("No current state for FSM\n");
     }
 
-    auto transition = _current->process(&input);
-    if (transition.next) {
-      _transition(transition.next);
+    auto [output, state] = _current->process(input);
+    if (state) {
+      _transition(state, input);
     }
-    return transition.output;
+    return output;
   }
 
 protected:
-  void _transition(state_node_t *state) {
-    if (_current && !_current->has_child(state)) {
+  void _transition(state_node_t *state, input_t *input) {
+    if (!_current->has_child(state)) {
       throw std::runtime_error("Invalid transition from " + _current->name +
                                " to " + state->name);
     }
+    _current->exit(input);
     _current = state;
+    _current->enter(input);
   }
 };

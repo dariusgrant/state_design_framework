@@ -1,6 +1,8 @@
 #include "FiniteStateMachine.hpp"
 #include <cassert>
 #include <chrono>
+#include <exception>
+#include <functional>
 #include <iostream>
 
 enum class LightState {
@@ -16,21 +18,28 @@ struct LightInput {
   std::chrono::high_resolution_clock::time_point end_time;
 };
 
-class LightStateNode : public StateNode<LightState> {
+class LightStateNode : public StateNode<LightInput, LightState> {
 public:
   const LightState state;
 
   LightStateNode(std::string name, LightState state)
       : StateNode(name), state(state) {}
 
-  StateTransition process(void *input) override {
+  void enter(LightInput *) override {
     std::cout << "Entering " << name << " State\n";
+  }
+
+  void exit(LightInput *) override {
+    std::cout << "Exiting " << name << " State\n";
+  }
+
+  StateTransition process(LightInput *input) override {
     if (!input) {
-      std::cout << "Received nullptr - noop\n";
-      return StateTransition(state, nullptr);
+      std::cout << "Received nullptr\n";
+      return state;
     }
 
-    return _process_impl(static_cast<LightInput *>(input));
+    return _process_impl(input);
   }
 
   virtual StateTransition _process_impl(LightInput *input) = 0;
@@ -40,23 +49,19 @@ public:
     return std::chrono::high_resolution_clock::now() >= end_time;
   }
 
-  LightStateNode *get_light_state_node(std::string state) {
-    return static_cast<LightStateNode *>(get_child(state));
-  }
-
   StateTransition transition_on_endtime(LightInput *input, std::string state) {
     if (input->end_time.time_since_epoch().count() == 0) {
       std::cout << "No end time set\n";
-      return StateTransition(this->state, this);
+      return this->state;
     } else if (!reached_end_time(input->end_time)) {
       std::cout << "Waiting "
                 << (input->end_time - std::chrono::high_resolution_clock::now())
                        .count()
                 << "seconds...\n";
-      return StateTransition(this->state, this);
+      return this->state;
     } else {
-      auto next = get_light_state_node(state);
-      return StateTransition(next->state, next);
+      auto next = get_child<LightStateNode>(state);
+      return {next->state, next};
     }
   }
 };
@@ -68,10 +73,11 @@ public:
   StateTransition _process_impl(LightInput *input) override {
     if (input->started) {
       std::cout << "Starting Race Light!\n";
-      auto next = get_light_state_node("Red");
-      return StateTransition(next->state, next);
+      auto next = get_child<LightStateNode>("Red");
+      return {next->state, next};
+    } else {
+      return state;
     }
-    return StateTransition(state, nullptr);
   }
 };
 
@@ -99,12 +105,34 @@ public:
 
   StateTransition _process_impl(LightInput *input) override {
     if (input->started) {
-      auto next = get_light_state_node("Red");
-      return StateTransition(next->state, next);
+      auto next = get_child<LightStateNode>("Red");
+      return {next->state, next};
     }
     return transition_on_endtime(input, "Off");
   }
 };
+
+template <class _FSM> struct Expected {
+  bool exception_occurrence = false;
+  std::function<bool(const _FSM *)> checker = [](auto) { return true; };
+};
+
+template <typename _FSM, typename... _Args>
+void test_fsm_construction(Expected<_FSM> expected, _Args... args) {
+  std::cout << "Test FSM Construction\n";
+  bool exception_occurred = false;
+  _FSM *fsm;
+  try {
+    fsm = new _FSM(args...);
+  } catch (...) {
+    exception_occurred = true;
+  }
+
+  assert(expected.exception_occurrence == exception_occurred);
+  if (expected.checker) {
+    assert(expected.checker(fsm));
+  }
+}
 
 int main() {
   auto off = OffState();
@@ -113,9 +141,25 @@ int main() {
   auto green = GreenState();
 
   off.connect(&red);
+  red.connect(&yellow);
+  yellow.connect(&green);
+  green.connect(&off);
+
+  using fsm_t = FiniteStateMachine<LightInput, LightState>;
+  Expected<fsm_t> expected{true};
+  test_fsm_construction(expected, nullptr);
+
+  expected.exception_occurrence = false;
+  expected.checker = [&](const fsm_t *fsm) {
+    return fsm->current_state() == &off;
+  };
+  test_fsm_construction(expected, &off);
+
+  // FSM()
+  auto fsm = FiniteStateMachine(&off);
+  assert(fsm.current_state() == &off);
+  assert(fsm.transduce() == LightState::OFF);
 
   auto input = LightInput();
-  auto fsm = FiniteStateMachine(&off);
-
-  assert(fsm.transduce(input) == LightState::OFF);
+  assert(fsm.transduce(&input) == LightState::OFF);
 }
