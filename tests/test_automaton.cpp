@@ -21,17 +21,17 @@ class LightInputVariant
                           std::chrono::high_resolution_clock::time_point> {};
 
 // Get the index of an alternative type.
-template <typename _Alternative, size_t N = 0>
+template <typename _Alternative,
+          size_t N = std::variant_size_v<LightInputVariant::variant> - 1>
 constexpr size_t alternative_index() {
-  if constexpr (N >= std::variant_size_v<LightInputVariant::variant>) {
+  if constexpr (N == 0) {
     return 0;
+  } else {
+    constexpr bool is_index = std::is_same_v<
+        _Alternative,
+        std::variant_alternative_t<N, LightInputVariant::variant>>;
+    return is_index ? N : alternative_index<_Alternative, N - 1>();
   }
-
-  constexpr bool is_index =
-      std::is_same_v<_Alternative,
-                     std::variant_alternative_t<N, LightInputVariant::variant>>;
-  constexpr size_t next = (N + 1 > N ? N : N + 1);
-  return is_index ? N : alternative_index<_Alternative, next>();
 }
 
 template <typename _Alternative>
@@ -52,18 +52,23 @@ public:
     std::cout << "Exiting " << name << " State\n";
   }
 
-
-
   StateTransition process(const LightInputVariant &input) override {
     switch (input.index()) {
     case alternative_index_v<std::monostate>:
       std::cout << "Received nullptr\n";
+      return state;
+    case alternative_index_v<bool>:
       return state;
     default:
       return _process_impl(input);
     }
   }
 
+  virtual StateTransition _process_impl(const bool &) { return state; }
+  virtual StateTransition
+  _process_impl(const std::chrono::high_resolution_clock::time_point &) {
+    return state;
+  }
   virtual StateTransition _process_impl(const LightInputVariant &input) = 0;
 
   bool reached_end_time(
@@ -94,25 +99,35 @@ public:
   }
 };
 
-class OffState :
-      public
-        LightStateNode{
-          public : OffState() : LightStateNode("Off", LightState::OFF){}
+class OffState : public LightStateNode {
+public:
+  OffState() : LightStateNode("Off", LightState::OFF) {}
 
-          StateTransition _process_impl(const LightInputVariant &input)
-              override{auto started = std::get_if<bool>(&input);
+  StateTransition _process_impl(const bool &started) override {
+    if (!started) {
+      std::cout << "Race Light not started.\n";
+      return state;
+    } else {
+      std::cout << "Starting Race Light!\n";
+      auto next = get_child<LightStateNode>("Red");
+      return {next->state, next};
+    }
+  }
 
-        if (started == nullptr) {
-          std::cout << "Input is not `bool`.\n";
-          return state;
-        } else if (!(*started)) {
-          std::cout << "Race Light not started.\n";
-          return state;
-        } else {
-          std::cout << "Starting Race Light!\n";
-          auto next = get_child<LightStateNode>("Red");
-          return {next->state, next};
-        }
+  StateTransition _process_impl(const LightInputVariant &input) override {
+    auto started = std::get_if<bool>(&input);
+
+    if (started == nullptr) {
+      std::cout << "Input is not `bool`.\n";
+      return state;
+    } else if (!(*started)) {
+      std::cout << "Race Light not started.\n";
+      return state;
+    } else {
+      std::cout << "Starting Race Light!\n";
+      auto next = get_child<LightStateNode>("Red");
+      return {next->state, next};
+    }
   }
 };
 
