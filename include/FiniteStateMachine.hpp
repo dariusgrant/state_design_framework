@@ -55,10 +55,13 @@ public:
   }
 };
 
-template <typename _Input, typename _Output> class StateNode : public Node {
+template <typename... _Inputs>
+using InputVariant = std::variant<std::monostate, _Inputs...>;
+
+template <typename _InputVariant, typename _Output> class StateNode : public Node {
 public:
-  using state_node_t = StateNode<_Input, _Output>;
-  using input_t = _Input;
+  using state_node_t = StateNode<_InputVariant, _Output>;
+  using input_variant_t = _InputVariant;
   using output_t = _Output;
 
   struct StateTransition {
@@ -75,22 +78,15 @@ public:
   // `enter` will be invoked upon a FSM transitioning into this `StateNode`.
   // The input that was used to exit the previous `StateNode` will be the input
   // to this `StateNode`.
-  virtual void enter(const input_t &input) {}
+  virtual void enter(const input_variant_t &input) {}
 
   // `exit` will be invoked upon a FSM transitioning out of this `StateNode`.
   // The input is the same of when the previous `process` function was invoked.
-  virtual void exit(const input_t &input) {}
+  virtual void exit(const input_variant_t &input) {}
 
   // `process` will be invoked upon a FSM receiving input. It will return a
   // `StateTransition` that has the next state and output after processing.
-  virtual StateTransition process(const input_t &input) = 0;
-};
-
-template <typename... _Inputs>
-class InputVariant : public std::variant<std::monostate, _Inputs...> {
-public:
-  using input_types_t = std::tuple<_Inputs...>;
-  
+  virtual StateTransition process(const input_variant_t &input) = 0;
 };
 
 template <typename _InputVariant, typename _Output> class FiniteStateMachine {
