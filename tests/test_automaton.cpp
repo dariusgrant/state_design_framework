@@ -54,13 +54,15 @@ public:
 
   StateTransition process(const LightInputVariant &input) override {
     switch (input.index()) {
-    case alternative_index_v<std::monostate>:
-      std::cout << "Received nullptr\n";
-      return state;
     case alternative_index_v<bool>:
-      return state;
+      return _process_impl(std::get<bool>(input));
+    case alternative_index_v<std::chrono::high_resolution_clock::time_point>:
+      return _process_impl(
+          std::get<std::chrono::high_resolution_clock::time_point>(input));
     default:
-      return _process_impl(input);
+      std::cout << "No transition.\n";
+      return state;
+      ;
     }
   }
 
@@ -69,27 +71,23 @@ public:
   _process_impl(const std::chrono::high_resolution_clock::time_point &) {
     return state;
   }
-  virtual StateTransition _process_impl(const LightInputVariant &input) = 0;
+  // virtual StateTransition _process_impl(const LightInputVariant &input) = 0;
 
   bool reached_end_time(
-      std::chrono::high_resolution_clock::time_point end_time) const {
+      const std::chrono::high_resolution_clock::time_point &end_time) const {
     return std::chrono::high_resolution_clock::now() >= end_time;
   }
 
-  StateTransition transition_on_endtime(const LightInputVariant &input,
-                                        std::string state) {
-    auto end_time =
-        std::get_if<std::chrono::high_resolution_clock::time_point>(&input);
-    if (!end_time) {
-      std::cout << "Input is not a `time_point`.\n";
+  StateTransition transition_on_endtime(
+      const std::chrono::high_resolution_clock::time_point &end_time,
+      std::string state) {
+    if (end_time.time_since_epoch().count() == 0) {
+      std::cout << "No end time set.\n";
       return this->state;
-    } else if (end_time->time_since_epoch().count() == 0) {
-      std::cout << "No end time set\n";
-      return this->state;
-    } else if (!reached_end_time(*end_time)) {
+    } else if (!reached_end_time(end_time)) {
       std::cout
           << "Waiting "
-          << (*end_time - std::chrono::high_resolution_clock::now()).count()
+          << (end_time - std::chrono::high_resolution_clock::now()).count()
           << "seconds...\n";
       return this->state;
     } else {
@@ -113,30 +111,15 @@ public:
       return {next->state, next};
     }
   }
-
-  StateTransition _process_impl(const LightInputVariant &input) override {
-    auto started = std::get_if<bool>(&input);
-
-    if (started == nullptr) {
-      std::cout << "Input is not `bool`.\n";
-      return state;
-    } else if (!(*started)) {
-      std::cout << "Race Light not started.\n";
-      return state;
-    } else {
-      std::cout << "Starting Race Light!\n";
-      auto next = get_child<LightStateNode>("Red");
-      return {next->state, next};
-    }
-  }
 };
 
 class RedState : public LightStateNode {
 public:
   RedState() : LightStateNode("Red", LightState::RED) {}
 
-  StateTransition _process_impl(const LightInputVariant &input) override {
-    return transition_on_endtime(input, "Yellow");
+  StateTransition _process_impl(
+      const std::chrono::high_resolution_clock::time_point &end_time) override {
+    return transition_on_endtime(end_time, "Yellow");
   }
 };
 
@@ -144,8 +127,9 @@ class YellowState : public LightStateNode {
 public:
   YellowState() : LightStateNode("Yellow", LightState::YELLOW) {}
 
-  StateTransition _process_impl(const LightInputVariant &input) override {
-    return transition_on_endtime(input, "Green");
+  StateTransition _process_impl(
+      const std::chrono::high_resolution_clock::time_point &end_time) override {
+    return transition_on_endtime(end_time, "Green");
   }
 };
 
@@ -153,16 +137,17 @@ class GreenState : public LightStateNode {
 public:
   GreenState() : LightStateNode("Green", LightState::GREEN) {}
 
-  StateTransition _process_impl(const LightInputVariant &input) override {
-    auto started = std::get_if<bool>(&input);
-    if (started == nullptr) {
-      std::cout << "Input is not `bool`.\n";
-      return state;
-    } else if (*started) {
+  StateTransition _process_impl(
+      const std::chrono::high_resolution_clock::time_point &end_time) override {
+    return transition_on_endtime(end_time, "Off");
+  }
+
+  StateTransition _process_impl(const bool &started) override {
+    if (started) {
       auto next = get_child<LightStateNode>("Red");
       return {next->state, next};
     } else {
-      return transition_on_endtime(input, "Off");
+      return state;
     }
   }
 };

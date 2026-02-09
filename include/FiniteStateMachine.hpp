@@ -58,7 +58,8 @@ public:
 template <typename... _Inputs>
 using InputVariant = std::variant<std::monostate, _Inputs...>;
 
-template <typename _InputVariant, typename _Output> class StateNode : public Node {
+template <typename _InputVariant, typename _Output>
+class StateNode : public Node {
 public:
   using state_node_t = StateNode<_InputVariant, _Output>;
   using input_variant_t = _InputVariant;
@@ -90,7 +91,8 @@ public:
 };
 
 template <typename _InputVariant, typename _Output> class FiniteStateMachine {
-//   static_assert(std::is_same_v<_InputVariant, InputVariant<typename _InputVariant::input_types_t>>);
+  //   static_assert(std::is_same_v<_InputVariant, InputVariant<typename
+  //   _InputVariant::input_types_t>>);
 public:
   using input_variant_t = _InputVariant;
   using output_t = _Output;
@@ -100,7 +102,8 @@ private:
   state_node_t *_current;
 
 public:
-  FiniteStateMachine(state_node_t *initial, const input_variant_t& arg = input_variant_t())
+  FiniteStateMachine(state_node_t *initial,
+                     const input_variant_t &arg = input_variant_t())
       : _current(initial) {
     if (!_current) {
       throw std::runtime_error("No initial state set in FSM.\n");
@@ -110,7 +113,7 @@ public:
 
   const state_node_t *current_state() const { return _current; }
 
-  output_t transduce(const input_variant_t & input = input_variant_t()) {
+  output_t transduce(const input_variant_t &input = input_variant_t()) {
     if (!_current) {
       throw std::runtime_error("No current state for FSM\n");
     }
@@ -123,7 +126,7 @@ public:
   }
 
 protected:
-  void _transition(state_node_t *state, const input_variant_t& input) {
+  void _transition(state_node_t *state, const input_variant_t &input) {
     if (!_current->has_child(state)) {
       throw std::runtime_error("Invalid transition from " + _current->name +
                                " to " + state->name);
