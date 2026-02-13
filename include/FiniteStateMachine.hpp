@@ -63,15 +63,38 @@ public:
 template <typename... _Inputs>
 using InputVariant = std::variant<std::monostate, _Inputs...>;
 
+// Get the index of an alternative type.
+template <typename _InputVariant, typename _Alternative,
+          size_t N = std::variant_size_v<typename _InputVariant::variant> - 1>
+constexpr size_t alternative_index() {
+  // The variant at index 0 must be of type `std::monostate`.
+  static_assert(
+      std::is_same_v<std::monostate, std::variant_alternative_t<
+                                         0, typename _InputVariant::variant>>);
+  if constexpr (N == 0) {
+    return 0;
+  } else {
+    constexpr bool is_index = std::is_same_v<
+        _Alternative,
+        std::variant_alternative_t<N, typename _InputVariant::variant>>;
+    return is_index ? N
+                    : alternative_index<_InputVariant, _Alternative, N - 1>();
+  }
+}
+
+template <typename _InputVariant, typename _Alternative>
+constexpr size_t alternative_index_v =
+    alternative_index<_InputVariant, _Alternative>();
+
 template <typename _InputVariant, typename _Output, typename _StateNode>
 struct StateTransition {
   _Output output;
-  _StateNode *state;
-  std::optional<_InputVariant> input;
+  _StateNode *next_state;
+  std::optional<_InputVariant> next_input;
 
   StateTransition(_Output output, _StateNode *next = nullptr,
                   std::optional<_InputVariant> input = std::nullopt)
-      : output(output), state(next), input(input) {}
+      : output(output), next_state(next), next_input(input) {}
 };
 
 template <typename _InputVariant, typename _Output>
@@ -89,28 +112,34 @@ public:
   // `enter` will be invoked upon a FSM transitioning into this `StateNode`.
   // The input that was used to exit the previous `StateNode` will be the input
   // to this `StateNode`.
-  virtual void enter(const input_variant_t &input) {}
+  virtual void enter(const input_variant_t &) {}
 
   // `exit` will be invoked upon a FSM transitioning out of this `StateNode`.
   // The input is the same of when the previous `process` function was invoked.
-  virtual void exit(const input_variant_t &input) {}
+  virtual void exit(const input_variant_t &) {}
 
   // `process` will be invoked upon a FSM receiving input. It will return a
   // `StateTransition` that has the next state and output after processing.
   virtual state_transition_t process(const input_variant_t &input) = 0;
 };
 
-// template <typename _InputVariant, typename _Output>
-// class DelayStateNode : public StateNode<_InputVariant, _Output> {
-// private:
-//   int _delay;
+template <typename _InputVariant, typename _Output>
+class DelayStateNode : public StateNode<_InputVariant, _Output> {
+private:
+  timespec _delay;
 
-// public:
-//   DelayStateNode(std::string name, int seconds = 0)
-//       : StateNode<_InputVariant, _Output>(name), _delay(seconds) {}
+public:
+  DelayStateNode(std::string name, timespec delay)
+      : StateNode<_InputVariant, _Output>(name), _delay(delay) {}
 
-//   void process(const DelayStateNode::input_variant_t &) override {}
-// };
+  DelayStateNode::state_transition_t
+  process(const DelayStateNode::input_variant_t &) override {
+    timespec ts = _delay;
+    while (nanosleep(&ts, &ts)) {
+    }
+    return std::monostate();
+  }
+};
 
 // template <typename _InputVariant, typename _Output>
 // class ExitDelayNode : public StateNode<_InputVariant, _Output> {
@@ -159,12 +188,12 @@ public:
     }
 
     auto transition = _current->process(input);
-    if (transition.state) {
-      _transition(transition.state, input);
+    if (transition.next_state) {
+      _transition(transition.next_state, input);
     }
 
-    if (transition.input.has_value()) {
-      return _feedback(transition.input.value());
+    if (transition.next_input.has_value()) {
+      return _feedback(transition.next_input.value());
     }
 
     return transition.output;

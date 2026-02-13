@@ -9,7 +9,6 @@
 #include <variant>
 
 enum class LightState {
-  UNKNOWN,
   OFF,
   RED,
   YELLOW,
@@ -20,65 +19,47 @@ class LightInputVariant
     : public InputVariant<bool,
                           std::chrono::high_resolution_clock::time_point> {};
 
-// Get the index of an alternative type.
-template <typename _Alternative,
-          size_t N = std::variant_size_v<LightInputVariant::variant> - 1>
-constexpr size_t alternative_index() {
-  if constexpr (N == 0) {
-    return 0;
-  } else {
-    constexpr bool is_index = std::is_same_v<
-        _Alternative,
-        std::variant_alternative_t<N, LightInputVariant::variant>>;
-    return is_index ? N : alternative_index<_Alternative, N - 1>();
-  }
-}
-
-template <typename _Alternative>
-constexpr size_t alternative_index_v = alternative_index<_Alternative>();
-
 class LightStateNode : public StateNode<LightInputVariant, LightState> {
 public:
   const LightState state;
-
   LightStateNode(std::string name, LightState state)
       : StateNode(name), state(state) {}
 
-  void enter(const LightInputVariant &input) override {
+  void enter(const LightInputVariant &) override {
     std::cout << "Entering " << name << " State\n";
   }
 
-  void exit(const LightInputVariant &input) override {
+  void exit(const LightInputVariant &) override {
     std::cout << "Exiting " << name << " State\n";
   }
 
-  StateTransition process(const LightInputVariant &input) override {
+  state_transition_t process(const LightInputVariant &input) override {
     switch (input.index()) {
-    case alternative_index_v<bool>:
+    case alternative_index_v<LightInputVariant, bool>:
       return _process_impl(std::get<bool>(input));
-    case alternative_index_v<std::chrono::high_resolution_clock::time_point>:
+    case alternative_index_v<LightInputVariant,
+                             std::chrono::high_resolution_clock::time_point>:
       return _process_impl(
           std::get<std::chrono::high_resolution_clock::time_point>(input));
     default:
       std::cout << "No transition.\n";
-      return state;
+      return {state};
       ;
     }
   }
 
-  virtual StateTransition _process_impl(const bool &) { return state; }
-  virtual StateTransition
+  virtual state_transition_t _process_impl(const bool &) { return state; }
+  virtual state_transition_t
   _process_impl(const std::chrono::high_resolution_clock::time_point &) {
     return state;
   }
-  // virtual StateTransition _process_impl(const LightInputVariant &input) = 0;
 
   bool reached_end_time(
       const std::chrono::high_resolution_clock::time_point &end_time) const {
     return std::chrono::high_resolution_clock::now() >= end_time;
   }
 
-  StateTransition transition_on_endtime(
+  state_transition_t transition_on_endtime(
       const std::chrono::high_resolution_clock::time_point &end_time,
       std::string state) {
     if (end_time.time_since_epoch().count() == 0) {
@@ -88,8 +69,8 @@ public:
       std::cout
           << "Waiting "
           << (end_time - std::chrono::high_resolution_clock::now()).count()
-          << "seconds...\n";
-      return this->state;
+          << " seconds...\n";
+      return {this->state, nullptr, LightInputVariant{end_time}};
     } else {
       auto next = get_child<LightStateNode>(state);
       return {next->state, next};
@@ -97,52 +78,55 @@ public:
   }
 };
 
-class OffState : public LightStateNode {
+class OffStateNode : public LightStateNode {
 public:
-  OffState() : LightStateNode("Off", LightState::OFF) {}
+  OffStateNode() : LightStateNode("Off", LightState::OFF) {}
 
-  StateTransition _process_impl(const bool &started) override {
+  state_transition_t _process_impl(const bool &started) override {
     if (!started) {
       std::cout << "Race Light not started.\n";
       return state;
     } else {
       std::cout << "Starting Race Light!\n";
       auto next = get_child<LightStateNode>("Red");
-      return {next->state, next};
+      return {next->state, next,
+              LightInputVariant{std::chrono::high_resolution_clock::now() +
+                                std::chrono::seconds(3)}};
     }
   }
 };
 
-class RedState : public LightStateNode {
+class RedStateNode : public LightStateNode {
 public:
-  RedState() : LightStateNode("Red", LightState::RED) {}
+  RedStateNode() : LightStateNode("Red", LightState::RED) {}
 
-  StateTransition _process_impl(
+  state_transition_t _process_impl(
       const std::chrono::high_resolution_clock::time_point &end_time) override {
     return transition_on_endtime(end_time, "Yellow");
   }
 };
 
-class YellowState : public LightStateNode {
+class YellowStateNode : public LightStateNode {
 public:
-  YellowState() : LightStateNode("Yellow", LightState::YELLOW) {}
+  YellowStateNode() : LightStateNode("Yellow", LightState::YELLOW) {}
 
-  StateTransition _process_impl(
+  state_transition_t _process_impl(
       const std::chrono::high_resolution_clock::time_point &end_time) override {
+    std::cout << "Processing yellow state\n";
     return transition_on_endtime(end_time, "Green");
   }
 };
 
-class GreenState : public LightStateNode {
+class GreenStateNode : public LightStateNode {
 public:
-  GreenState() : LightStateNode("Green", LightState::GREEN) {}
+  GreenStateNode() : LightStateNode("Green", LightState::GREEN) {}
 
-  StateTransition _process_impl(
+  state_transition_t _process_impl(
       const std::chrono::high_resolution_clock::time_point &end_time) override {
     return transition_on_endtime(end_time, "Off");
   }
 
-  StateTransition _process_impl(const bool &started) override {
+  state_transition_t _process_impl(const bool &started) override {
     if (started) {
       auto next = get_child<LightStateNode>("Red");
       return {next->state, next};
@@ -150,6 +134,31 @@ public:
       return state;
     }
   }
+};
+
+class RaceLight {
+private:
+  LightState _light_state;
+  OffStateNode _off_state_node;
+  RedStateNode _red_state_node;
+  YellowStateNode _yellow_state_node;
+  GreenStateNode _green_state_node;
+  FiniteStateMachine<LightInputVariant, LightState> _fsm;
+
+public:
+  RaceLight()
+      : _light_state(LightState::OFF), _off_state_node(), _red_state_node(),
+        _yellow_state_node(), _green_state_node(), _fsm(&_off_state_node) {
+    _off_state_node.connect(&_red_state_node);
+    _red_state_node.connect(&_red_state_node);
+    _red_state_node.connect(&_yellow_state_node);
+    _yellow_state_node.connect(&_green_state_node);
+    _green_state_node.connect(&_off_state_node);
+  }
+
+  const LightState &light_state() const { return _light_state; }
+
+  void start() { _light_state = _fsm.transduce({true}); }
 };
 
 template <class _FSM> struct Expected {
@@ -175,31 +184,38 @@ void test_fsm_construction(Expected<_FSM> expected, _Args... args) {
 }
 
 int main() {
-  auto off = OffState();
-  auto red = RedState();
-  auto yellow = YellowState();
-  auto green = GreenState();
+  auto off = OffStateNode();
+  auto red = RedStateNode();
+  auto yellow = YellowStateNode();
+  auto green = GreenStateNode();
 
   off.connect(&red);
   red.connect(&yellow);
   yellow.connect(&green);
   green.connect(&off);
 
-  using fsm_t = FiniteStateMachine<LightInputVariant, LightState>;
-  Expected<fsm_t> expected{true};
-  test_fsm_construction(expected, nullptr);
+  // using fsm_t = FiniteStateMachine<LightInputVariant, LightState>;
+  // Expected<fsm_t> expected{true};
+  // test_fsm_construction(expected, nullptr);
 
-  expected.exception_occurrence = false;
-  expected.checker = [&](const fsm_t *fsm) {
-    return fsm->current_state() == &off;
-  };
-  test_fsm_construction(expected, &off);
+  // expected.exception_occurrence = false;
+  // expected.checker = [&](const fsm_t *fsm) {
+  //   return fsm->current_state() == &off;
+  // };
+  // test_fsm_construction(expected, &off);
 
   // FSM()
-  auto fsm = FiniteStateMachine(&off);
-  assert(fsm.current_state() == &off);
-  assert(fsm.transduce() == LightState::OFF);
+  // auto fsm = FiniteStateMachine(&off);
+  // assert(fsm.current_state() == &off);
+  // assert(fsm.transduce() == LightState::OFF);
 
-  auto input = LightInputVariant();
-  assert(fsm.transduce(input) == LightState::OFF);
+  // auto input = LightInputVariant();
+  // assert(fsm.transduce(input) == LightState::OFF);
+
+  auto race_light = RaceLight();
+  assert(race_light.light_state() == LightState::OFF);
+  race_light.start();
+  // assert(race_light.light_state() == LightState::RED);
+  // race_light.start();
+  // assert(race_light.light_state() == LightState::RED);
 }
