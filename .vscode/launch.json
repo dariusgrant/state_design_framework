@@ -1,0 +1,57 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug",
+            "program": "${workspaceFolder}/build/examples/stoplight",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug - Async Counting",
+            "program": "${workspaceFolder}/build/examples/async_counting",
+            "args": ["async"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug - Multiple Consumer",
+            "program": "${workspaceFolder}/build/examples/multiple_consumer",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug - Simulated Packet Parsing",
+            "program": "/usr/bin/time",
+            "args": [ "-v" ,
+            "${workspaceFolder}/build/examples/sim_packet_parsing"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug - Test FSM",
+            "program": "${workspaceFolder}/build/tests/test_fsm",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug - Test Automaton",
+            "program": "${workspaceFolder}/build/tests/test_automaton",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+    ]
+}

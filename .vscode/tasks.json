@@ -1,0 +1,146 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build - Stop Light",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "--std=c++17",
+                "-Wall",
+                "-Wpedantic",
+                "-I${workspaceFolder}/include",
+                "${workspaceFolder}/examples/stoplight.cpp",
+                "-o${workspaceFolder}/build/examples/stoplight"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build - Async Counting",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "--std=c++17",
+                "-g",
+                "-Wall",
+                "-Wpedantic",
+                "-I${workspaceFolder}/include",
+                "${workspaceFolder}/examples/async_counting.cpp",
+                "-o${workspaceFolder}/build/examples/async_counting"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build - Multiple Consumer",
+            "type": "shell",
+            "command": "clang++",
+            "args": [
+                "--std=c++17",
+                "-g",
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-I${workspaceFolder}/include",
+                "${workspaceFolder}/examples/multiple_consumer.cpp",
+                "-o${workspaceFolder}/build/examples/multiple_consumer"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Build - Simulated Packet Parsing FSM",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "--std=c++17",
+                "-g",
+                "-Wall",
+                "-Wpedantic",
+                "-Wfatal-errors",
+                "-ltbb",
+                "-I${workspaceFolder}/include",
+                "${workspaceFolder}/examples/sim_packet_parsing.cpp",
+                "-o${workspaceFolder}/build/examples/sim_packet_parsing"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build - test_fsm",
+            "type": "shell",
+            "command": "clang++",
+            "args": [
+                "--std=c++17",
+                "-O0",
+                "-MJ compile_commands_test_fsm.json",
+                "-g",
+                "-Wall",
+                "-Wpedantic",
+                "-Wfatal-errors",
+                "-ltbb",
+                "-I${workspaceFolder}/include",
+                "${workspaceFolder}/tests/test_fsm.cpp",
+                "-o${workspaceFolder}/build/tests/test_fsm"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build - test_automaton",
+            "type": "shell",
+            "command": "clang++",
+            "args": [
+                "--std=c++17",
+                "-O3",
+                "-MJ compile_commands_test_fsm.json",
+                "-g",
+                "-Wall",
+                "-Wpedantic",
+                "-Wfatal-errors",
+                "--extra-warnings",
+                "-ltbb",
+                "-I${workspaceFolder}/include",
+                "${workspaceFolder}/tests/test_automaton.cpp",
+                "-o${workspaceFolder}/build/tests/test_automaton"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Generate Diagram - test_fsm_sequence",
+            "type": "shell",
+            "command": "clang-uml -v -d ./; java -jar /usr/share/java/plantuml/plantuml.jar -tsvg diagrams/test_fsm_sequence.puml",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Generate Diagram - test_fsm_class",
+            "type": "shell",
+            "command": "clang-uml -n test_fsm_class -vv -d ./; java -jar /usr/share/java/plantuml/plantuml.jar -tsvg diagrams/test_fsm_class.puml",
+            "problemMatcher": [],
+            "group": "build"
+        }
+    ]
+}
